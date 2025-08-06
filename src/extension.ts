@@ -1,13 +1,19 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { JournalTreeViewProvider } from './JournalTreeView';
 
 export function activate(context: vscode.ExtensionContext) {
+    const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath');
+    const journalTreeViewProvider = new JournalTreeViewProvider(journalPath);
+    vscode.window.registerTreeDataProvider('md-journal-entries', journalTreeViewProvider);
+
     const newDailyEntryCommand = vscode.commands.registerCommand('md-journal.newDailyEntry', async () => {
         const journalPath = await getJournalPath();
         if (!journalPath) {
             return;
         }
+        journalTreeViewProvider.updateJournalPath(journalPath);
 
         const dateFormat = await getDateFormat();
         if (!dateFormat) {
@@ -29,6 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
             fs.writeFileSync(filePath, `# ${getFormattedDate(today, dateFormat)}
 
 `);
+            journalTreeViewProvider.refresh();
         }
 
         const document = await vscode.workspace.openTextDocument(filePath);
@@ -95,10 +102,15 @@ export function activate(context: vscode.ExtensionContext) {
 
             const newDocument = await vscode.workspace.openTextDocument(newFilePath);
             vscode.window.showTextDocument(newDocument);
+            journalTreeViewProvider.refresh();
         }
     });
 
-    context.subscriptions.push(newDailyEntryCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener);
+    const refreshEntriesCommand = vscode.commands.registerCommand('md-journal.refreshEntries', () => {
+        journalTreeViewProvider.refresh();
+    });
+
+    context.subscriptions.push(newDailyEntryCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener, refreshEntriesCommand);
 }
 
 async function getJournalPath(): Promise<string | undefined> {

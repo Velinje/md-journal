@@ -23,10 +23,10 @@ The core goal is to create a small, robust, and fast journaling tool for develop
 ## Added features
 *   **Automatic File Renaming:** When a new daily note is saved, it is automatically renamed based on the first line of the entry.
 *   **"Go to Today's Note" Command:** A dedicated command to quickly open the current day's journal entry if it already exists.
+*   **"Open Journal Folder" Command:** A simple command to open your main journal directory in the VS Code File Explorer as a vs code menu side panel.
 
 ## Future Feature Ideas (To Be Explored)
 
-*   **"Open Journal Folder" Command:** A simple command to open your main journal directory in the VS Code File Explorer.
 *   **Status Bar Indicator:** A small icon or text in the status bar that shows whether you've created an entry for today. Clicking it could run the "Go to Today's Note" or "New Daily Entry" command.
 *   **Backlinks/Wikilinks:** Support for `[[wiki-link]]` style linking between notes.
 *   **Tagging/Bookmarking System:** Add support for `#tags` or similar metadata within markdown files to easily categorize and find entries.

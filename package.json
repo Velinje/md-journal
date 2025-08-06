@@ -11,7 +11,8 @@
   ],
   "activationEvents": [
     "onCommand:md-journal.newDailyEntry",
-    "onCommand:md-journal.goToTodaysNote"
+    "onCommand:md-journal.goToTodaysNote",
+    "onCommand:md-journal.refreshEntries"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -23,8 +24,22 @@
       {
         "command": "md-journal.goToTodaysNote",
         "title": "Journal: Go to Today's Note"
+      },
+      {
+        "command": "md-journal.refreshEntries",
+        "title": "Refresh",
+        "icon": "$(refresh)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "md-journal.refreshEntries",
+          "when": "view == md-journal-entries",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "MD Journal",
       "properties": {
@@ -39,6 +54,23 @@
           "description": "The date format for your daily journal folders."
         }
       }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "md-journal-sidebar",
+          "title": "MD Journal",
+          "icon": "$(file)"
+        }
+      ]
+    },
+    "views": {
+      "md-journal-sidebar": [
+        {
+          "id": "md-journal-entries",
+          "name": "Entries"
+        }
+      ]
     }
   },
   "scripts": {
