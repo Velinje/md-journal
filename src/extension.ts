@@ -26,7 +26,22 @@ export function activate(context: vscode.ExtensionContext) {
         }
         journalTreeViewProvider.updateJournalPath(journalPath);
 
-        
+        const templateFolder = path.join(journalPath, '.templates');
+        if (!fs.existsSync(templateFolder)) {
+            fs.mkdirSync(templateFolder, { recursive: true });
+        }
+
+        const templates = fs.readdirSync(templateFolder).filter(file => file.endsWith('.md'));
+        let selectedTemplateContent = '';
+
+        if (templates.length > 0) {
+            const templateQuickPickItems = templates.map(template => ({ label: path.basename(template, '.md'), description: template }));
+            const selectedTemplate = await vscode.window.showQuickPick(templateQuickPickItems, { placeHolder: 'Select a template or press Esc for a blank note' });
+
+            if (selectedTemplate) {
+                selectedTemplateContent = fs.readFileSync(path.join(templateFolder, selectedTemplate.description), 'utf8');
+            }
+        }
 
         const today = new Date();
         const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');
@@ -39,28 +54,65 @@ export function activate(context: vscode.ExtensionContext) {
         const fileName = 'daily-note.md';
         const filePath = path.join(fullFolderPath, fileName);
 
-        if (!fs.existsSync(filePath)) {
+        let fileContent = '';
+        if (selectedTemplateContent) {
             const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
-            const templatePath = vscode.workspace.getConfiguration('md-journal').get<string>('templatePath', '');
-
-            let fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}
-
-`;
-
-            if (templatePath && fs.existsSync(templatePath)) {
-                fileContent = fs.readFileSync(templatePath, 'utf8');
-                fileContent = fileContent.replace(/\{date\}/g, getFormattedTimestamp(today, fileHeaderFormat));
-            }
-
-            fs.writeFileSync(filePath, fileContent);
-            journalTreeViewProvider.refresh();
+            fileContent = selectedTemplateContent.replace(/\{date\}/g, getFormattedTimestamp(today, fileHeaderFormat));
+        } else {
+            const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
+            fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}\n\n`;
         }
+
+        fs.writeFileSync(filePath, fileContent);
+        journalTreeViewProvider.refresh();
 
         const document = await vscode.workspace.openTextDocument(filePath);
         vscode.window.showTextDocument(document);
         updateStatusBar(statusBarItem);
         tagIndexManager.updateIndexForFile(filePath);
         tagTreeViewProvider.refresh();
+    });
+
+    const saveAsTemplateCommand = vscode.commands.registerCommand('md-journal.saveAsTemplate', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showInformationMessage('No active editor found.');
+            return;
+        }
+
+        const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
+        if (!journalPath) {
+            vscode.window.showInformationMessage('Journal path not configured. Please configure it in settings.');
+            return;
+        }
+
+        const templateFolder = path.join(journalPath, '.templates');
+        if (!fs.existsSync(templateFolder)) {
+            fs.mkdirSync(templateFolder, { recursive: true });
+        }
+
+        const templateName = await vscode.window.showInputBox({
+            prompt: 'Enter template name (e.g., meeting-notes)',
+            value: path.basename(editor.document.fileName, '.md')
+        });
+
+        if (!templateName) {
+            return;
+        }
+
+        let contentToSave = editor.document.getText();
+        // Optionally strip the first line if it matches the fileHeaderFormat pattern
+        const firstLine = editor.document.lineAt(0).text;
+        const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
+        const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&'))}`);
+
+        if (regex.test(firstLine)) {
+            contentToSave = editor.document.getText().substring(editor.document.lineAt(0).rangeIncludingLineBreak.end.character);
+        }
+
+        const templateFilePath = path.join(templateFolder, `${templateName}.md`);
+        fs.writeFileSync(templateFilePath, contentToSave);
+        vscode.window.showInformationMessage(`Template '${templateName}' saved successfully!`);
     });
 
     const goToTodaysNoteCommand = vscode.commands.registerCommand('md-journal.goToTodaysNote', async () => {
@@ -124,7 +176,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const refreshEntriesCommand = vscode.commands.registerCommand('md-journal.refreshEntries', () => {        journalTreeViewProvider.refresh();        updateStatusBar(statusBarItem);    });    context.subscriptions.push(newDailyEntryCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener, refreshEntriesCommand);    updateStatusBar(statusBarItem);    vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem));
+    const refreshEntriesCommand = vscode.commands.registerCommand('md-journal.refreshEntries', () => {        journalTreeViewProvider.refresh();        updateStatusBar(statusBarItem);    });    context.subscriptions.push(newDailyEntryCommand, saveAsTemplateCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener, refreshEntriesCommand);    updateStatusBar(statusBarItem);    vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem));
 
     // File system watcher for tag indexing
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.md');

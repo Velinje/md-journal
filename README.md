@@ -10,18 +10,19 @@ This is a VS Code extension that leverages the built-in markdown editing capabil
 *   **Customizable Folder Structure:** Define your preferred folder hierarchy using `YYYY`, `MM`, and `DD` placeholders (e.g., `YYYY/MM/DD` or `YYYY-MM-DD`).
 *   **Status Bar Indicator:** A status bar icon that shows whether you've created an entry for today.
 *   **Tagging/Bookmarking System:** Supports `#tags` within markdown files and provides a dedicated view to browse tags and their associated entries.
+*   **Template Management:** Create and use templates directly from your journal folder. Templates are stored in a `.templates` subfolder within your journal path.
 
 ## Usage
 
-On first run, the extension will prompt you to select a root directory for your journal and to configure the date format for daily folders (e.g., `YYYY-MM-DD`).
+On first run, the extension will prompt you to select a root directory for your journal.
 
 You can create new daily entries or go to today's note using the commands in the VS Code Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`):
-*   `Journal: New Daily Entry`
+*   `Journal: New Daily Entry` (If templates exist, you will be prompted to select one. Otherwise, a blank note with a timestamped header will be created.)
 *   `Journal: Go to Today's Note`
+*   `Journal: Save as Template` (Saves the content of the active editor as a template in your journal's `.templates` folder. The initial timestamp header will be automatically removed.)
 
 ## Configuration
 
 *   `md-journal.journalPath`: The root path to your journal.
 *   `md-journal.folderStructure`: The folder structure for your journal entries (e.g., `YYYY/MM/DD` or `YYYY-MM-DD`). Use `YYYY`, `MM`, `DD` as placeholders (default: `YYYY/MM/DD`).
 *   `md-journal.fileHeaderFormat`: The format for the header of a new journal file. Uses `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss` as placeholders (default: `YYYY-MM-DD HH:mm:ss`).
-*   `md-journal.templatePath`: The absolute path to a template file to use for new journal entries. Use `{date}` as a placeholder for the formatted timestamp.
