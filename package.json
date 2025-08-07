@@ -80,6 +80,10 @@
         {
           "id": "md-journal-entries",
           "name": "Entries"
+        },
+        {
+          "id": "md-journal-tags",
+          "name": "Tags"
         }
       ]
     }

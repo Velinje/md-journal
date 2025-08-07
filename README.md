@@ -9,6 +9,7 @@ This is a VS Code extension that leverages the built-in markdown editing capabil
 *   **"Open Journal Folder" Command:** A simple command to open your main journal directory in the VS Code File Explorer as a VS Code menu side panel.
 *   **Customizable Folder Structure:** Define your preferred folder hierarchy using `YYYY`, `MM`, and `DD` placeholders (e.g., `YYYY/MM/DD` or `YYYY-MM-DD`).
 *   **Status Bar Indicator:** A status bar icon that shows whether you've created an entry for today.
+*   **Tagging/Bookmarking System:** Supports `#tags` within markdown files and provides a dedicated view to browse tags and their associated entries.
 
 ## Usage
 

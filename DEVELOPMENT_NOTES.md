@@ -20,13 +20,13 @@ The core goal is to create a small, robust, and fast journaling tool for develop
 *   **Activation:** The primary way to create a new entry is through a command in the Command Palette (e.g., `Journal: New Daily Entry`).
 *   **Folder Structure:** Daily entries are now stored in a customizable sub-folder structure defined by the `md-journal.folderStructure` setting (e.g., `YYYY/MM/DD`). This allows users to define their preferred hierarchy using `YYYY`, `MM`, and `DD` placeholders.
 *   **Status Bar Indicator:** A small icon or text in the status bar that shows whether you've created an entry for today. Clicking it could run the "Go to Today's Note" or "New Daily Entry" command.
+*   **Tagging/Bookmarking System:** Add support for `#tags` or similar metadata within markdown files to easily categorize and find entries. Add the possibility to have a bookmark section in the markdown explorer view.
 *   **Workspace Independence:** The extension is designed to work without a specific workspace being open, allowing global access to the journal.
 *   **Initial Search:** For the initial version, users can leverage VS Code's built-in file search by opening the main journal folder. Advanced search is a potential future feature.
 
 ## Future Feature Ideas
 
 *   **Backlinks/Wikilinks:** Support for `[[wiki-link]]` style linking between notes.
-*   **Tagging/Bookmarking System:** Add support for `#tags` or similar metadata within markdown files to easily categorize and find entries. Add the possibility to have a bookmark section in the markdown explorer view.
 *   **Journal Templates:** Allow users to define templates for different types of entries (e.g., daily stand-up, personal thoughts, meeting notes).
 *   **Advanced Search:** Implement a dedicated command to search across all journal entries, potentially with filtering by date or tags.
 *   **Calendar View:** A webview-based calendar to visualize and navigate to entries from different dates.
