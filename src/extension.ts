@@ -21,8 +21,15 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const today = new Date();
+        const year = today.getFullYear().toString();
+        const yearFolderPath = path.join(journalPath, year);
+
+        if (!fs.existsSync(yearFolderPath)) {
+            fs.mkdirSync(yearFolderPath, { recursive: true });
+        }
+
         const folderName = getFormattedDate(today, dateFormat);
-        const folderPath = path.join(journalPath, folderName);
+        const folderPath = path.join(yearFolderPath, folderName);
 
         if (!fs.existsSync(folderPath)) {
             fs.mkdirSync(folderPath, { recursive: true });
@@ -52,8 +59,10 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const today = new Date();
+        const year = today.getFullYear().toString();
+        const yearFolderPath = path.join(journalPath, year);
         const folderName = getFormattedDate(today, dateFormat);
-        const folderPath = path.join(journalPath, folderName);
+        const folderPath = path.join(yearFolderPath, folderName);
 
         if (!fs.existsSync(folderPath)) {
             const selection = await vscode.window.showInformationMessage('No note found for today.', 'Create One');
