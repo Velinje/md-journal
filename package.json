@@ -58,6 +58,11 @@
           "type": "string",
           "default": "YYYY-MM-DD HH:mm:ss",
           "description": "The format for the header of a new journal file. Uses YYYY, MM, DD, HH, mm, ss as placeholders."
+        },
+        "md-journal.templatePath": {
+          "type": "string",
+          "default": "",
+          "description": "The absolute path to a template file to use for new journal entries. Use {date} as a placeholder for the formatted timestamp."
         }
       }
     },

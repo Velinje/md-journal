@@ -33,9 +33,18 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (!fs.existsSync(filePath)) {
             const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
-            fs.writeFileSync(filePath, `# ${getFormattedTimestamp(today, fileHeaderFormat)}
+            const templatePath = vscode.workspace.getConfiguration('md-journal').get<string>('templatePath', '');
 
-`);
+            let fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}
+
+`;
+
+            if (templatePath && fs.existsSync(templatePath)) {
+                fileContent = fs.readFileSync(templatePath, 'utf8');
+                fileContent = fileContent.replace(/\{date\}/g, getFormattedTimestamp(today, fileHeaderFormat));
+            }
+
+            fs.writeFileSync(filePath, fileContent);
             journalTreeViewProvider.refresh();
         }
 

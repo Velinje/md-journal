@@ -23,3 +23,4 @@ You can create new daily entries or go to today's note using the commands in the
 *   `md-journal.journalPath`: The root path to your journal.
 *   `md-journal.folderStructure`: The folder structure for your journal entries (e.g., `YYYY/MM/DD` or `YYYY-MM-DD`). Use `YYYY`, `MM`, `DD` as placeholders (default: `YYYY/MM/DD`).
 *   `md-journal.fileHeaderFormat`: The format for the header of a new journal file. Uses `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss` as placeholders (default: `YYYY-MM-DD HH:mm:ss`).
+*   `md-journal.templatePath`: The absolute path to a template file to use for new journal entries. Use `{date}` as a placeholder for the formatted timestamp.
