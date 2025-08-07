@@ -22,12 +22,12 @@ The core goal is to create a small, robust, and fast journaling tool for develop
 *   **Status Bar Indicator:** A small icon or text in the status bar that shows whether you've created an entry for today. Clicking it could run the "Go to Today's Note" or "New Daily Entry" command.
 *   **Tagging/Bookmarking System:** Add support for `#tags` or similar metadata within markdown files to easily categorize and find entries. Add the possibility to have a bookmark section in the markdown explorer view.
 *   **Journal Templates:** Allow users to create and manage templates directly within the journal folder. Templates are stored in a `.templates` subfolder and can be selected when creating new entries.
+*   **Backlinks/Wikilinks:** Support for `[[wiki-link]]` style linking between notes, with a dedicated sidebar view to show notes linking to the current file.
 *   **Workspace Independence:** The extension is designed to work without a specific workspace being open, allowing global access to the journal.
 *   **Initial Search:** For the initial version, users can leverage VS Code's built-in file search by opening the main journal folder. Advanced search is a potential future feature.
 
 ## Future Feature Ideas
 
-*   **Backlinks/Wikilinks:** Support for `[[wiki-link]]` style linking between notes.
 *   **Advanced Search:** Implement a dedicated command to search across all journal entries, potentially with filtering by date or tags.
 *   **Calendar View:** A webview-based calendar to visualize and navigate to entries from different dates.
 *   **Statistics:** Show word count, entry streak, and other interesting stats. Historical footprints on your writing.

@@ -83,6 +83,10 @@
         {
           "id": "md-journal-tags",
           "name": "Tags"
+        },
+        {
+          "id": "md-journal-backlinks",
+          "name": "Backlinks"
         }
       ]
     }

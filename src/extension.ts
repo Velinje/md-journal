@@ -4,6 +4,8 @@ import * as path from 'path';
 import { JournalTreeViewProvider } from './JournalTreeView';
 import { TagIndexManager } from './TagIndexManager';
 import { TagTreeViewProvider } from './TagTreeView';
+import { LinkIndexManager } from './LinkIndexManager';
+import { BacklinksTreeViewProvider } from './BacklinksTreeView';
 
 export function activate(context: vscode.ExtensionContext) {
     const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
@@ -15,6 +17,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     const tagTreeViewProvider = new TagTreeViewProvider(tagIndexManager);
     vscode.window.registerTreeDataProvider('md-journal-tags', tagTreeViewProvider);
+
+    const linkIndexManager = new LinkIndexManager(context, journalPath);
+    linkIndexManager.initializeIndex();
+
+    const backlinksTreeViewProvider = new BacklinksTreeViewProvider(linkIndexManager);
+    vscode.window.registerTreeDataProvider('md-journal-backlinks', backlinksTreeViewProvider);
 
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     context.subscriptions.push(statusBarItem);
@@ -60,7 +68,9 @@ export function activate(context: vscode.ExtensionContext) {
             fileContent = selectedTemplateContent.replace(/\{date\}/g, getFormattedTimestamp(today, fileHeaderFormat));
         } else {
             const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
-            fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}\n\n`;
+            fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}
+
+`;
         }
 
         fs.writeFileSync(filePath, fileContent);
@@ -71,6 +81,8 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatusBar(statusBarItem);
         tagIndexManager.updateIndexForFile(filePath);
         tagTreeViewProvider.refresh();
+        linkIndexManager.updateIndexForFile(filePath);
+        backlinksTreeViewProvider.refresh(filePath);
     });
 
     const saveAsTemplateCommand = vscode.commands.registerCommand('md-journal.saveAsTemplate', async () => {
@@ -104,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
         // Optionally strip the first line if it matches the fileHeaderFormat pattern
         const firstLine = editor.document.lineAt(0).text;
         const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
-        const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&'))}`);
+        const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))}`);
 
         if (regex.test(firstLine)) {
             contentToSave = editor.document.getText().substring(editor.document.lineAt(0).rangeIncludingLineBreak.end.character);
@@ -173,27 +185,47 @@ export function activate(context: vscode.ExtensionContext) {
             journalTreeViewProvider.refresh();
             tagIndexManager.updateIndexForFile(newFilePath);
             tagTreeViewProvider.refresh();
+            linkIndexManager.updateIndexForFile(newFilePath);
+            backlinksTreeViewProvider.refresh(newFilePath);
         }
     });
 
     const refreshEntriesCommand = vscode.commands.registerCommand('md-journal.refreshEntries', () => {        journalTreeViewProvider.refresh();        updateStatusBar(statusBarItem);    });    context.subscriptions.push(newDailyEntryCommand, saveAsTemplateCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener, refreshEntriesCommand);    updateStatusBar(statusBarItem);    vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem));
 
-    // File system watcher for tag indexing
+    // File system watcher for tag and link indexing
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.md');
-    watcher.onDidChange(uri => tagIndexManager.updateIndexForFile(uri.fsPath));
-    watcher.onDidCreate(uri => tagIndexManager.updateIndexForFile(uri.fsPath));
-    watcher.onDidDelete(uri => tagIndexManager.updateIndexForFile(uri.fsPath));
+    watcher.onDidChange(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); });
+    watcher.onDidCreate(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); });
+    watcher.onDidDelete(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); });
     context.subscriptions.push(watcher);
 
-    // Refresh tag view when journal path changes
+    // Refresh tag and link views when journal path changes
     vscode.workspace.onDidChangeConfiguration(event => {
         if (event.affectsConfiguration('md-journal.journalPath')) {
             const newJournalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
             tagIndexManager.setJournalPath(newJournalPath);
             tagIndexManager.initializeIndex();
             tagTreeViewProvider.refresh();
+            linkIndexManager.setJournalPath(newJournalPath);
+            linkIndexManager.initializeIndex();
+            backlinksTreeViewProvider.refresh();
         }
     });
+
+    // Update backlinks panel when active editor changes
+    vscode.window.onDidChangeActiveTextEditor(editor => {
+        const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
+        if (editor && editor.document.languageId === 'markdown' && editor.document.uri.fsPath.startsWith(journalPath)) {
+            backlinksTreeViewProvider.refresh(editor.document.uri.fsPath);
+        } else {
+            backlinksTreeViewProvider.refresh(); // Clear the view
+        }
+    });
+
+    // Initial call to set up backlinks view
+    if (vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.languageId === 'markdown' && vscode.window.activeTextEditor.document.uri.fsPath.startsWith(journalPath)) {
+        backlinksTreeViewProvider.refresh(vscode.window.activeTextEditor.document.uri.fsPath);
+    }
 }
 
 async function getJournalPath(): Promise<string | undefined> {

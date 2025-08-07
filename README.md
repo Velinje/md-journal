@@ -11,6 +11,7 @@ This is a VS Code extension that leverages the built-in markdown editing capabil
 *   **Status Bar Indicator:** A status bar icon that shows whether you've created an entry for today.
 *   **Tagging/Bookmarking System:** Supports `#tags` within markdown files and provides a dedicated view to browse tags and their associated entries.
 *   **Template Management:** Create and use templates directly from your journal folder. Templates are stored in a `.templates` subfolder within your journal path.
+*   **Backlinks/Wikilinks:** Supports `[[wiki-link]]` style linking between notes, with a dedicated sidebar view to show notes linking to the current file.
 
 ## Usage
 
