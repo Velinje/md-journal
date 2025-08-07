@@ -2,29 +2,6 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-class YearTreeItem extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly year: string
-    ) {
-        super(label, collapsibleState);
-        this.contextValue = 'year';
-    }
-}
-
-class DateTreeItem extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly year: string,
-        public readonly date: string
-    ) {
-        super(label, collapsibleState);
-        this.contextValue = 'date';
-    }
-}
-
 export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
@@ -49,42 +26,57 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
             return Promise.resolve([messageItem]);
         }
 
+        const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');
+        const components = folderStructure.split(/[\\/>]/);
+
         if (element) {
-            if (element.contextValue === 'year') {
-                const year = (element as YearTreeItem).year;
-                const yearPath = path.join(this.journalPath as string, year);
-                const dateDirs = fs.readdirSync(yearPath).filter(file => {
-                    return fs.statSync(path.join(yearPath, file)).isDirectory();
+            // If element is a folder, get its children
+            if (element.contextValue === 'folder') {
+                const currentPath = (element as FolderTreeItem).fullPath;
+                const currentLevel = (element as FolderTreeItem).level;
+
+                const children = fs.readdirSync(currentPath).filter(file => {
+                    const fullPath = path.join(currentPath, file);
+                    const isDirectory = fs.statSync(fullPath).isDirectory();
+                    const isMarkdownFile = file.endsWith('.md');
+
+                    if (isDirectory) {
+                        const nextLevelComponent = components[currentLevel];
+                        return this.matchesComponentPattern(file, nextLevelComponent);
+                    }
+                    return isMarkdownFile;
                 });
+
                 return Promise.resolve(
-                    dateDirs.map(dir => new DateTreeItem(dir, vscode.TreeItemCollapsibleState.Collapsed, year, dir))
-                );
-            } else if (element.contextValue === 'date') {
-                const year = (element as DateTreeItem).year;
-                const date = (element as DateTreeItem).date;
-                const datePath = path.join(this.journalPath as string, year, date);
-                const files = fs.readdirSync(datePath).filter(file => file.endsWith('.md'));
-                return Promise.resolve(
-                    files.map(file => {
-                        const treeItem = new vscode.TreeItem(file, vscode.TreeItemCollapsibleState.None);
-                        treeItem.command = {
-                            command: 'vscode.open',
-                            title: 'Open File',
-                            arguments: [vscode.Uri.file(path.join(datePath, file))]
-                        };
-                        return treeItem;
+                    children.map(child => {
+                        const childPath = path.join(currentPath, child);
+                        if (fs.statSync(childPath).isDirectory()) {
+                            return new FolderTreeItem(child, vscode.TreeItemCollapsibleState.Collapsed, childPath, currentLevel + 1);
+                        } else {
+                            const treeItem = new vscode.TreeItem(child, vscode.TreeItemCollapsibleState.None);
+                            treeItem.command = {
+                                command: 'vscode.open',
+                                title: 'Open File',
+                                arguments: [vscode.Uri.file(childPath)]
+                            };
+                            return treeItem;
+                        }
                     })
                 );
             }
-            return Promise.resolve([]); // Should not happen
+            return Promise.resolve([]); // Should not happen for files
         } else {
-            // This is the root, so we are getting the year folders
-            const years = fs.readdirSync(this.journalPath).filter(file => {
-                const fullPath = path.join(this.journalPath as string, file);
-                return fs.statSync(fullPath).isDirectory() && /^\d{4}$/.test(file); // Check if it's a 4-digit year
+            // This is the root, so we are getting the first level of folders based on the structure
+            const rootPath = this.journalPath;
+            const firstLevelComponent = components[0];
+
+            const firstLevelFolders = fs.readdirSync(rootPath).filter(file => {
+                const fullPath = path.join(rootPath, file);
+                return fs.statSync(fullPath).isDirectory() && this.matchesComponentPattern(file, firstLevelComponent);
             });
+
             return Promise.resolve(
-                years.map(year => new YearTreeItem(year, vscode.TreeItemCollapsibleState.Collapsed, year))
+                firstLevelFolders.map(folder => new FolderTreeItem(folder, vscode.TreeItemCollapsibleState.Collapsed, path.join(rootPath, folder), 1))
             );
         }
     }
@@ -92,5 +84,30 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
     updateJournalPath(journalPath: string): void {
         this.journalPath = journalPath;
         this.refresh();
+    }
+
+    private matchesComponentPattern(name: string, component: string): boolean {
+        switch (component) {
+            case 'YYYY':
+                return /^\d{4}$/.test(name);
+            case 'MM':
+                return /^\d{2}$/.test(name) && parseInt(name) >= 1 && parseInt(name) <= 12;
+            case 'DD':
+                return /^\d{2}$/.test(name) && parseInt(name) >= 1 && parseInt(name) <= 31;
+            default:
+                return true; // For custom components, assume it matches for now
+        }
+    }
+}
+
+class FolderTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly label: string,
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+        public readonly fullPath: string,
+        public readonly level: number
+    ) {
+        super(label, collapsibleState);
+        this.contextValue = 'folder';
     }
 }

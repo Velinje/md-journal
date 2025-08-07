@@ -48,10 +48,16 @@
           "default": "",
           "description": "The root path to your journal."
         },
-        "md-journal.dateFormat": {
+        
+        "md-journal.folderStructure": {
           "type": "string",
-          "default": "YYYY-MM-DD",
-          "description": "The date format for your daily journal folders."
+          "default": "YYYY/MM-DD",
+          "description": "The folder structure for your journal entries (e.g., YYYY/MM/DD or YYYY/MM-DD). Use YYYY, MM, DD as placeholders."
+        },
+        "md-journal.fileHeaderFormat": {
+          "type": "string",
+          "default": "YYYY-MM-DD HH:mm:ss",
+          "description": "The format for the header of a new journal file. Uses YYYY, MM, DD, HH, mm, ss as placeholders."
         }
       }
     },

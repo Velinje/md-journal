@@ -4,7 +4,7 @@ import * as path from 'path';
 import { JournalTreeViewProvider } from './JournalTreeView';
 
 export function activate(context: vscode.ExtensionContext) {
-    const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath');
+    const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
     const journalTreeViewProvider = new JournalTreeViewProvider(journalPath);
     vscode.window.registerTreeDataProvider('md-journal-entries', journalTreeViewProvider);
 
@@ -15,31 +15,22 @@ export function activate(context: vscode.ExtensionContext) {
         }
         journalTreeViewProvider.updateJournalPath(journalPath);
 
-        const dateFormat = await getDateFormat();
-        if (!dateFormat) {
-            return;
-        }
+        
 
         const today = new Date();
-        const year = today.getFullYear().toString();
-        const yearFolderPath = path.join(journalPath, year);
+        const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');
+        const fullFolderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
 
-        if (!fs.existsSync(yearFolderPath)) {
-            fs.mkdirSync(yearFolderPath, { recursive: true });
-        }
-
-        const folderName = getFormattedDate(today, dateFormat);
-        const folderPath = path.join(yearFolderPath, folderName);
-
-        if (!fs.existsSync(folderPath)) {
-            fs.mkdirSync(folderPath, { recursive: true });
+        if (!fs.existsSync(fullFolderPath)) {
+            fs.mkdirSync(fullFolderPath, { recursive: true });
         }
 
         const fileName = 'daily-note.md';
-        const filePath = path.join(folderPath, fileName);
+        const filePath = path.join(fullFolderPath, fileName);
 
         if (!fs.existsSync(filePath)) {
-            fs.writeFileSync(filePath, `# ${getFormattedDate(today, dateFormat)}
+            const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
+            fs.writeFileSync(filePath, `# ${getFormattedTimestamp(today, fileHeaderFormat)}
 
 `);
             journalTreeViewProvider.refresh();
@@ -50,19 +41,12 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const goToTodaysNoteCommand = vscode.commands.registerCommand('md-journal.goToTodaysNote', async () => {
-        const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath');
-        const dateFormat = vscode.workspace.getConfiguration('md-journal').get<string>('dateFormat');
-
-        if (!journalPath || !dateFormat) {
-            vscode.window.showInformationMessage('Journal path not set. Please run "Journal: New Daily Entry" first.');
-            return;
-        }
+        const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
+        
 
         const today = new Date();
-        const year = today.getFullYear().toString();
-        const yearFolderPath = path.join(journalPath, year);
-        const folderName = getFormattedDate(today, dateFormat);
-        const folderPath = path.join(yearFolderPath, folderName);
+        const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');
+        const folderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
 
         if (!fs.existsSync(folderPath)) {
             const selection = await vscode.window.showInformationMessage('No note found for today.', 'Create One');
@@ -143,34 +127,39 @@ async function getJournalPath(): Promise<string | undefined> {
     return journalPath;
 }
 
-async function getDateFormat(): Promise<string | undefined> {
-    let dateFormat = vscode.workspace.getConfiguration('md-journal').get<string>('dateFormat');
 
-    if (!dateFormat) {
-        const result = await vscode.window.showInputBox({
-            prompt: 'Enter the date format for your daily folders.',
-            value: 'YYYY-MM-DD'
-        });
 
-        if (result) {
-            dateFormat = result;
-            await vscode.workspace.getConfiguration('md-journal').update('dateFormat', dateFormat, vscode.ConfigurationTarget.Global);
-        } else {
-            return undefined;
-        }
-    }
-    return dateFormat;
-}
-
-function getFormattedDate(date: Date, format: string): string {
+function getFormattedTimestamp(date: Date, format: string): string {
     const year = date.getFullYear();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
 
     return format
         .replace('YYYY', year.toString())
         .replace('MM', month)
+        .replace('DD', day)
+        .replace('HH', hours)
+        .replace('mm', minutes)
+        .replace('ss', seconds);
+}
+
+function getJournalFolderPath(date: Date, folderStructure: string): string {
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+
+    let folderPath = folderStructure
+        .replace('YYYY', year)
+        .replace('MM', month)
         .replace('DD', day);
+
+    // Replace any custom separators (like '>') with the system's path separator
+    folderPath = folderPath.replace(/>/g, path.sep);
+
+    return folderPath;
 }
 
 function sanitizeFileName(name: string): string {
