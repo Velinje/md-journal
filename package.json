@@ -1,8 +1,31 @@
 {
   "name": "md-journal",
   "displayName": "md-journal",
-  "description": "Performant Journaling tool Using Markdown",
-  "version": "0.1.0",
+  "description": "MD Journal: Keep your journaling simple and versatile. A powerful VS Code extension for seamless Markdown journaling.",
+  "version": "0.2.0",
+  "repository": {
+    "url": "https://github.com/Velinje/md-journal",
+    "type": "git",
+    "directory": "packages/md-journal"
+  },
+  "bugs": {
+    "url": "https://github.com/Velinje/md-journal/issues"
+  },
+  "homepage": "https://github.com/Velinje/md-journal",
+  "license": "MIT",
+  "keywords": [
+    "vscode",
+    "extension",
+    "journal",
+    "markdown",
+    "md-journal",
+    "daily notes",
+    "productivity"
+  ],
+  "author": {
+    "name": "Andreas Gillberg",
+    "url": "https://github.com/Velinje"
+  },
   "engines": {
     "vscode": "^1.101.0"
   },
@@ -70,7 +93,7 @@
         {
           "id": "md-journal-sidebar",
           "title": "MD Journal",
-          "icon": "$(file)"
+          "icon": "resources/icon.svg"
         }
       ]
     },
@@ -78,15 +101,18 @@
       "md-journal-sidebar": [
         {
           "id": "md-journal-entries",
-          "name": "Entries"
+          "name": "Entries",
+          "icon": "$(notebook)"
         },
         {
           "id": "md-journal-tags",
-          "name": "Tags"
+          "name": "Tags",
+          "icon": "$(tag)"
         },
         {
           "id": "md-journal-backlinks",
-          "name": "Backlinks"
+          "name": "Backlinks",
+          "icon": "$(link)"
         }
       ]
     }
