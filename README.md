@@ -8,6 +8,7 @@ This is a VS Code extension that leverages the built-in markdown editing capabil
 *   **"Go to Today's Note" Command:** A dedicated command to quickly open the current day's journal entry if it already exists.
 *   **"Open Journal Folder" Command:** A simple command to open your main journal directory in the VS Code File Explorer as a VS Code menu side panel.
 *   **Customizable Folder Structure:** Define your preferred folder hierarchy using `YYYY`, `MM`, and `DD` placeholders (e.g., `YYYY/MM/DD` or `YYYY-MM-DD`).
+*   **Status Bar Indicator:** A status bar icon that shows whether you've created an entry for today.
 
 ## Usage
 

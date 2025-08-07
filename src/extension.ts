@@ -8,6 +8,9 @@ export function activate(context: vscode.ExtensionContext) {
     const journalTreeViewProvider = new JournalTreeViewProvider(journalPath);
     vscode.window.registerTreeDataProvider('md-journal-entries', journalTreeViewProvider);
 
+    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    context.subscriptions.push(statusBarItem);
+
     const newDailyEntryCommand = vscode.commands.registerCommand('md-journal.newDailyEntry', async () => {
         const journalPath = await getJournalPath();
         if (!journalPath) {
@@ -38,6 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const document = await vscode.workspace.openTextDocument(filePath);
         vscode.window.showTextDocument(document);
+        updateStatusBar(statusBarItem);
     });
 
     const goToTodaysNoteCommand = vscode.commands.registerCommand('md-journal.goToTodaysNote', async () => {
@@ -99,52 +103,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const refreshEntriesCommand = vscode.commands.registerCommand('md-journal.refreshEntries', () => {
-        journalTreeViewProvider.refresh();
-    });
-
-    context.subscriptions.push(newDailyEntryCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener, refreshEntriesCommand);
-}
-
-async function getJournalPath(): Promise<string | undefined> {
-    let journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath');
-
-    if (!journalPath) {
-        const result = await vscode.window.showOpenDialog({
-            canSelectFiles: false,
-            canSelectFolders: true,
-            canSelectMany: false,
-            openLabel: 'Select Journal Folder'
-        });
-
-        if (result && result.length > 0) {
-            journalPath = result[0].fsPath;
-            await vscode.workspace.getConfiguration('md-journal').update('journalPath', journalPath, vscode.ConfigurationTarget.Global);
-        } else {
-            return undefined;
-        }
-    }
-    return journalPath;
-}
-
-
-
-function getFormattedTimestamp(date: Date, format: string): string {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-
-    return format
-        .replace('YYYY', year.toString())
-        .replace('MM', month)
-        .replace('DD', day)
-        .replace('HH', hours)
-        .replace('mm', minutes)
-        .replace('ss', seconds);
-}
+    const refreshEntriesCommand = vscode.commands.registerCommand('md-journal.refreshEntries', () => {        journalTreeViewProvider.refresh();        updateStatusBar(statusBarItem);    });    context.subscriptions.push(newDailyEntryCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener, refreshEntriesCommand);    updateStatusBar(statusBarItem);    vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem));}async function getJournalPath(): Promise<string | undefined> {    let journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath');    if (!journalPath) {        const result = await vscode.window.showOpenDialog({            canSelectFiles: false,            canSelectFolders: true,            canSelectMany: false,            openLabel: 'Select Journal Folder'        });        if (result && result.length > 0) {            journalPath = result[0].fsPath;            await vscode.workspace.getConfiguration('md-journal').update('journalPath', journalPath, vscode.ConfigurationTarget.Global);        } else {            return undefined;        }    }    return journalPath;}function updateStatusBar(statusBarItem: vscode.StatusBarItem) {    const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');    if (!journalPath) {        statusBarItem.hide();        return;    }    const today = new Date();    const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');    const folderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));    if (fs.existsSync(folderPath) && fs.readdirSync(folderPath).filter(file => file.endsWith('.md')).length > 0) {        statusBarItem.text = `$(check) Today\'s Note`;        statusBarItem.command = 'md-journal.goToTodaysNote';        statusBarItem.show();    } else {        statusBarItem.text = `$(add) New Note`;        statusBarItem.command = 'md-journal.newDailyEntry';        statusBarItem.show();    }}function getFormattedTimestamp(date: Date, format: string): string {    const year = date.getFullYear();    const month = (date.getMonth() + 1).toString().padStart(2, '0');    const day = date.getDate().toString().padStart(2, '0');    const hours = date.getHours().toString().padStart(2, '0');    const minutes = date.getMinutes().toString().padStart(2, '0');    const seconds = date.getSeconds().toString().padStart(2, '0');    return format        .replace('YYYY', year.toString())        .replace('MM', month)        .replace('DD', day)        .replace('HH', hours)        .replace('mm', minutes)        .replace('ss', seconds);}
 
 function getJournalFolderPath(date: Date, folderStructure: string): string {
     const year = date.getFullYear().toString();
