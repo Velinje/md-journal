@@ -36,20 +36,26 @@ export class LinkIndexManager {
     }
 
     public async updateIndexForFile(filePath: string, save: boolean = true) {
-        
-        this.removeFileFromIndex(filePath);
+        const oldLinks = this.linkIndex[filePath]?.linksTo || [];
+        for (const linkedToFile of oldLinks) {
+            if (this.linkIndex[linkedToFile]) {
+                this.linkIndex[linkedToFile].linkedFrom = this.linkIndex[linkedToFile].linkedFrom.filter(p => p !== filePath);
+            }
+        }
 
         if (!fs.existsSync(filePath)) {
+            delete this.linkIndex[filePath];
             if (save) {
                 this.saveIndex();
             }
             return;
         }
 
+        this.linkIndex[filePath] = { linksTo: [], linkedFrom: this.linkIndex[filePath]?.linkedFrom || [] };
+
         const content = fs.readFileSync(filePath, 'utf8');
         const links = this.extractWikilinks(content);
 
-        this.linkIndex[filePath] = { linksTo: [], linkedFrom: [] };
         for (const linkTitle of links) {
             const targetPath = await this.resolveLinkPath(filePath, linkTitle);
             if (targetPath) {
@@ -64,15 +70,6 @@ export class LinkIndexManager {
         }
         if (save) {
             this.saveIndex();
-        }
-    }
-
-    private removeFileFromIndex(filePath: string) {
-        delete this.linkIndex[filePath];
-
-        for (const file in this.linkIndex) {
-            this.linkIndex[file].linkedFrom = this.linkIndex[file].linkedFrom.filter(p => p !== filePath);
-            this.linkIndex[file].linksTo = this.linkIndex[file].linksTo.filter(p => p !== filePath);
         }
     }
 
@@ -100,11 +97,7 @@ export class LinkIndexManager {
             return match;
         });
 
-        if (foundFile) {
-            return foundFile;
-        }
-
-        return possiblePath;
+        return foundFile;
     }
 
     public getBacklinks(filePath: string): string[] {
