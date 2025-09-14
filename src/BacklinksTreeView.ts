@@ -40,7 +40,7 @@ export class BacklinksTreeViewProvider implements vscode.TreeDataProvider<Backli
 
     getChildren(element?: BacklinkTreeItem): Thenable<BacklinkTreeItem[]> {
         if (element) {
-            return Promise.resolve([]); // No children for file items
+            return Promise.resolve([]);
         } else {
             if (this.currentFileBacklinks.length === 0) {
                 return Promise.resolve([new BacklinkTreeItem('No backlinks found.', vscode.Uri.parse('empty:'), vscode.TreeItemCollapsibleState.None)]);

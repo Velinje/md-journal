@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getAllMarkdownFiles } from './utilities';
 
 interface LinkIndex {
     [filePath: string]: {
-        linksTo: string[]; // Files this file links to
-        linkedFrom: string[]; // Files that link to this file
+        linksTo: string[];
+        linkedFrom: string[];
     };
 }
 
@@ -34,22 +35,23 @@ export class LinkIndexManager {
         this.context.globalState.update('mdJournalLinkIndex', this.linkIndex);
     }
 
-    public async updateIndexForFile(filePath: string) {
-        // Clean up old entries for this file
+    public async updateIndexForFile(filePath: string, save: boolean = true) {
+        
         this.removeFileFromIndex(filePath);
 
         if (!fs.existsSync(filePath)) {
-            this.saveIndex();
-            return; // File deleted
+            if (save) {
+                this.saveIndex();
+            }
+            return;
         }
 
         const content = fs.readFileSync(filePath, 'utf8');
         const links = this.extractWikilinks(content);
 
-        // Add new links from this file
         this.linkIndex[filePath] = { linksTo: [], linkedFrom: [] };
-        links.forEach(linkTitle => {
-            const targetPath = this.resolveLinkPath(filePath, linkTitle);
+        for (const linkTitle of links) {
+            const targetPath = await this.resolveLinkPath(filePath, linkTitle);
             if (targetPath) {
                 this.linkIndex[filePath].linksTo.push(targetPath);
                 if (!this.linkIndex[targetPath]) {
@@ -59,15 +61,15 @@ export class LinkIndexManager {
                     this.linkIndex[targetPath].linkedFrom.push(filePath);
                 }
             }
-        });
-        this.saveIndex();
+        }
+        if (save) {
+            this.saveIndex();
+        }
     }
 
     private removeFileFromIndex(filePath: string) {
-        // Remove file from its own entry
         delete this.linkIndex[filePath];
 
-        // Remove file from linkedFrom lists of other files
         for (const file in this.linkIndex) {
             this.linkIndex[file].linkedFrom = this.linkIndex[file].linkedFrom.filter(p => p !== filePath);
             this.linkIndex[file].linksTo = this.linkIndex[file].linksTo.filter(p => p !== filePath);
@@ -80,43 +82,29 @@ export class LinkIndexManager {
         return matches.map(match => match[1]);
     }
 
-    private resolveLinkPath(sourceFilePath: string, linkTitle: string): string | undefined {
-        // Simple resolution: assume linkTitle is a file name within the journal
-        // This needs to be more robust for real-world wikilinks (e.g., handling subfolders)
-        // For now, we'll just search for a file with that name in the journal path
+    private async resolveLinkPath(sourceFilePath: string, linkTitle: string): Promise<string | undefined> {
         const journalRoot = this.journalPath;
         if (!journalRoot) {
             return undefined;
         }
 
-        // Basic attempt: check if it's a direct file in the journal root or a subfolder
         const possiblePath = path.join(journalRoot, `${linkTitle}.md`);
         if (fs.existsSync(possiblePath)) {
             return possiblePath;
         }
 
-        // More advanced: search all markdown files in the journal for a matching basename
-        // This can be slow for large journals, consider optimizing later
-        const allMdFiles = this.getAllMarkdownFilesSync(journalRoot);
-        const foundFile = allMdFiles.find(file => path.basename(file, '.md') === linkTitle);
-        return foundFile;
-    }
+        const allMdFiles = await getAllMarkdownFiles(journalRoot);
+        const foundFile = allMdFiles.find(file => {
+            const basename = path.basename(file, '.md').replace(/-/g, ' ');
+            const match = basename === linkTitle.replace(/-/g, ' ');
+            return match;
+        });
 
-    private getAllMarkdownFilesSync(dir: string): string[] {
-        let markdownFiles: string[] = [];
-        if (!fs.existsSync(dir)) {
-            return markdownFiles;
+        if (foundFile) {
+            return foundFile;
         }
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-                markdownFiles = markdownFiles.concat(this.getAllMarkdownFilesSync(fullPath));
-            } else if (entry.isFile() && entry.name.endsWith('.md')) {
-                markdownFiles.push(fullPath);
-            }
-        }
-        return markdownFiles;
+
+        return possiblePath;
     }
 
     public getBacklinks(filePath: string): string[] {
@@ -124,28 +112,11 @@ export class LinkIndexManager {
     }
 
     public async initializeIndex() {
-        this.linkIndex = {}; // Clear existing index
-        const files = await this.getAllMarkdownFilesAsync(this.journalPath);
+        this.linkIndex = {};
+        const files = await getAllMarkdownFiles(this.journalPath);
         for (const file of files) {
-            await this.updateIndexForFile(file);
+            await this.updateIndexForFile(file, false);
         }
         this.saveIndex();
-    }
-
-    private async getAllMarkdownFilesAsync(dir: string): Promise<string[]> {
-        let markdownFiles: string[] = [];
-        if (!fs.existsSync(dir)) {
-            return markdownFiles;
-        }
-        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-                markdownFiles = markdownFiles.concat(await this.getAllMarkdownFilesAsync(fullPath));
-            } else if (entry.isFile() && entry.name.endsWith('.md')) {
-                markdownFiles.push(fullPath);
-            }
-        }
-        return markdownFiles;
     }
 }

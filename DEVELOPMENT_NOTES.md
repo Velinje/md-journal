@@ -12,7 +12,7 @@ The core functionality is exposed through a command in the Command Palette, allo
 
 If a journal entry is created without a title, the extension will automatically use a snippet from the first line as the filename.
 
-The core goal is to create a small, robust, and fast journaling tool for developers and writers who prefer to work within VS Code and use markdown.
+The core goal is to create a small, robust, and fast journaling tool for developers and writers who prefer to work within VS Code and use markdown. Keeping it simple for a soul purpose of allowing it to work as a frictionless flow together with VS Code and it's extensability. It does not extend outside of those functional purposes as other functionalities are left for other extensions or programs to handle.
 
 ## Core Functionality Decisions
 
@@ -33,3 +33,4 @@ The core goal is to create a small, robust, and fast journaling tool for develop
 *   **Statistics:** Show word count, entry streak, and other interesting stats. Historical footprints on your writing.
 *   **Export Options:** Allow users to export their journal (or parts of it) to formats like PDF or HTML, CSV etc.
 *   **Live Preview/WYSIWYG Editor (Low Priority):** A custom editor that provides a live, editable preview of the markdown file, similar to Typora or Obsidian.
+*   **General TODO file:** A markdown list of todos that can easily be accessible and edited with a quick keystroke

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getAllMarkdownFiles } from './utilities';
 
 interface TagIndex { [tag: string]: string[]; }
 
@@ -24,15 +25,16 @@ export class TagIndexManager {
         this.context.globalState.update('mdJournalTagIndex', this.tagIndex);
     }
 
-    public async updateIndexForFile(filePath: string) {
-        // Remove existing entries for this file
+    public async updateIndexForFile(filePath: string, save: boolean = true) {
         for (const tag in this.tagIndex) {
             this.tagIndex[tag] = this.tagIndex[tag].filter(p => p !== filePath);
         }
 
         if (!fs.existsSync(filePath)) {
-            this.saveIndex();
-            return; // File deleted
+            if (save) {
+                this.saveIndex();
+            }
+            return;
         }
 
         const content = fs.readFileSync(filePath, 'utf8');
@@ -46,7 +48,10 @@ export class TagIndexManager {
                 this.tagIndex[tag].push(filePath);
             }
         });
-        this.saveIndex();
+
+        if (save) {
+            this.saveIndex();
+        }
     }
 
     private extractTags(content: string): string[] {
@@ -72,28 +77,11 @@ export class TagIndexManager {
     }
 
     public async initializeIndex() {
-        this.tagIndex = {}; // Clear existing index
-        const files = await this.getAllMarkdownFiles(this.journalPath);
+        this.tagIndex = {};
+        const files = await getAllMarkdownFiles(this.journalPath);
         for (const file of files) {
-            await this.updateIndexForFile(file);
+            await this.updateIndexForFile(file, false);
         }
         this.saveIndex();
-    }
-
-    private async getAllMarkdownFiles(dir: string): Promise<string[]> {
-        let markdownFiles: string[] = [];
-        if (!fs.existsSync(dir)) {
-            return markdownFiles;
-        }
-        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-                markdownFiles = markdownFiles.concat(await this.getAllMarkdownFiles(fullPath));
-            } else if (entry.isFile() && entry.name.endsWith('.md')) {
-                markdownFiles.push(fullPath);
-            }
-        }
-        return markdownFiles;
     }
 }

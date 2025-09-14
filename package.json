@@ -3,6 +3,7 @@
   "displayName": "md-journal",
   "description": "MD Journal: Keep your journaling simple and versatile. A powerful VS Code extension for seamless Markdown journaling.",
   "version": "0.2.0",
+  "publisher": "velinje",
   "repository": {
     "url": "https://github.com/Velinje/md-journal",
     "type": "git",
@@ -32,11 +33,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:md-journal.newDailyEntry",
-    "onCommand:md-journal.goToTodaysNote",
-    "onCommand:md-journal.refreshEntries"
-  ],
+
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -78,13 +75,13 @@
         
         "md-journal.folderStructure": {
           "type": "string",
-          "default": "YYYY/MM-DD",
-          "description": "The folder structure for your journal entries (e.g., YYYY/MM/DD or YYYY/MM-DD). Use YYYY, MM, DD as placeholders."
+          "default": "YYYY/MMMM/DD-dddd",
+          "description": "The folder structure for your journal entries. Uses YYYY, MMMM, MM, dddd, DD as placeholders."
         },
         "md-journal.fileHeaderFormat": {
           "type": "string",
-          "default": "YYYY-MM-DD HH:mm:ss",
-          "description": "The format for the header of a new journal file. Uses YYYY, MM, DD, HH, mm, ss as placeholders."
+          "default": "daily dddd YYYY-MM-DD",
+          "description": "The format for the header of a new journal file. Uses YYYY, MM, DD, dddd, HH, mm, ss as placeholders."
         }
       }
     },

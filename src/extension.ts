@@ -7,32 +7,49 @@ import { TagTreeViewProvider } from './TagTreeView';
 import { LinkIndexManager } from './LinkIndexManager';
 import { BacklinksTreeViewProvider } from './BacklinksTreeView';
 
-export function activate(context: vscode.ExtensionContext) {
-    const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
-    const journalTreeViewProvider = new JournalTreeViewProvider(journalPath);
-    vscode.window.registerTreeDataProvider('md-journal-entries', journalTreeViewProvider);
+let folderStructure: string;
+let tagIndexManager: TagIndexManager;
+let linkIndexManager: LinkIndexManager;
+let journalTreeViewProvider: JournalTreeViewProvider;
+let tagTreeViewProvider: TagTreeViewProvider;
+let backlinksTreeViewProvider: BacklinksTreeViewProvider;
+let statusBarItem: vscode.StatusBarItem;
+let disposables: vscode.Disposable[] = [];
 
-    const tagIndexManager = new TagIndexManager(context, journalPath);
-    tagIndexManager.initializeIndex();
+async function initialize(context: vscode.ExtensionContext, journalPath: string) {
+    // Dispose previous instances
+    disposables.forEach(d => d.dispose());
+    disposables = [];
 
-    const tagTreeViewProvider = new TagTreeViewProvider(tagIndexManager);
-    vscode.window.registerTreeDataProvider('md-journal-tags', tagTreeViewProvider);
+    folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MMMM/DD-dddd');
 
-    const linkIndexManager = new LinkIndexManager(context, journalPath);
-    linkIndexManager.initializeIndex();
+    journalTreeViewProvider = new JournalTreeViewProvider(journalPath);
+    disposables.push(vscode.window.registerTreeDataProvider('md-journal-entries', journalTreeViewProvider));
 
-    const backlinksTreeViewProvider = new BacklinksTreeViewProvider(linkIndexManager);
-    vscode.window.registerTreeDataProvider('md-journal-backlinks', backlinksTreeViewProvider);
+    tagIndexManager = new TagIndexManager(context, journalPath);
+    await tagIndexManager.initializeIndex();
 
-    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    context.subscriptions.push(statusBarItem);
+    tagTreeViewProvider = new TagTreeViewProvider(tagIndexManager);
+    disposables.push(vscode.window.registerTreeDataProvider('md-journal-tags', tagTreeViewProvider));
 
-    const newDailyEntryCommand = vscode.commands.registerCommand('md-journal.newDailyEntry', async () => {
+    linkIndexManager = new LinkIndexManager(context, journalPath);
+    await linkIndexManager.initializeIndex();
+
+    backlinksTreeViewProvider = new BacklinksTreeViewProvider(linkIndexManager);
+    disposables.push(vscode.window.registerTreeDataProvider('md-journal-backlinks', backlinksTreeViewProvider));
+
+    if (!statusBarItem) {
+        statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+        context.subscriptions.push(statusBarItem);
+    }
+    updateStatusBar(statusBarItem);
+
+    // Commands
+    disposables.push(vscode.commands.registerCommand('md-journal.newDailyEntry', async () => {
         const journalPath = await getJournalPath();
         if (!journalPath) {
             return;
         }
-        journalTreeViewProvider.updateJournalPath(journalPath);
 
         const templateFolder = path.join(journalPath, '.templates');
         if (!fs.existsSync(templateFolder)) {
@@ -52,7 +69,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const today = new Date();
-        const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');
         const fullFolderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
 
         if (!fs.existsSync(fullFolderPath)) {
@@ -68,9 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
             fileContent = selectedTemplateContent.replace(/\{date\}/g, getFormattedTimestamp(today, fileHeaderFormat));
         } else {
             const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
-            fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}
-
-`;
+            fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}\n\n`;
         }
 
         fs.writeFileSync(filePath, fileContent);
@@ -83,9 +97,9 @@ export function activate(context: vscode.ExtensionContext) {
         tagTreeViewProvider.refresh();
         linkIndexManager.updateIndexForFile(filePath);
         backlinksTreeViewProvider.refresh(filePath);
-    });
+    }));
 
-    const saveAsTemplateCommand = vscode.commands.registerCommand('md-journal.saveAsTemplate', async () => {
+    disposables.push(vscode.commands.registerCommand('md-journal.saveAsTemplate', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showInformationMessage('No active editor found.');
@@ -113,10 +127,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         let contentToSave = editor.document.getText();
-        // Optionally strip the first line if it matches the fileHeaderFormat pattern
         const firstLine = editor.document.lineAt(0).text;
         const fileHeaderFormat = vscode.workspace.getConfiguration('md-journal').get<string>('fileHeaderFormat', 'YYYY-MM-DD HH:mm:ss');
-        const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))}`);
+        const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&'))}`);
 
         if (regex.test(firstLine)) {
             contentToSave = editor.document.getText().substring(editor.document.lineAt(0).rangeIncludingLineBreak.end.character);
@@ -125,14 +138,12 @@ export function activate(context: vscode.ExtensionContext) {
         const templateFilePath = path.join(templateFolder, `${templateName}.md`);
         fs.writeFileSync(templateFilePath, contentToSave);
         vscode.window.showInformationMessage(`Template '${templateName}' saved successfully!`);
-    });
+    }));
 
-    const goToTodaysNoteCommand = vscode.commands.registerCommand('md-journal.goToTodaysNote', async () => {
+    disposables.push(vscode.commands.registerCommand('md-journal.goToTodaysNote', async () => {
         const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
-        
 
         const today = new Date();
-        const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');
         const folderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
 
         if (!fs.existsSync(folderPath)) {
@@ -146,7 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
         const files = fs.readdirSync(folderPath).filter(file => file.endsWith('.md'));
 
         if (files.length === 0) {
-             const selection = await vscode.window.showInformationMessage('No note found for today.', 'Create One');
+            const selection = await vscode.window.showInformationMessage('No note found for today.', 'Create One');
             if (selection === 'Create One') {
                 vscode.commands.executeCommand('md-journal.newDailyEntry');
             }
@@ -163,75 +174,100 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.window.showTextDocument(document);
             }
         }
-    });
+    }));
 
-    const onDidSaveTextDocumentListener = vscode.workspace.onDidSaveTextDocument(async (document) => {
-        if (path.basename(document.fileName) === 'daily-note.md') {
-            const firstLine = document.lineAt(0).text;
-            if (!firstLine.trim()) {
-                return;
+    disposables.push(vscode.commands.registerCommand('md-journal.refreshEntries', () => {
+        journalTreeViewProvider.refresh();
+        updateStatusBar(statusBarItem);
+    }));
+
+    // Listeners
+    disposables.push(vscode.workspace.onDidSaveTextDocument(async (document) => {
+        const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
+        if (document.languageId === 'markdown' && document.uri.fsPath.startsWith(journalPath)) {
+            if (path.basename(document.fileName) === 'daily-note.md') {
+                const firstLine = document.lineAt(0).text;
+                if (!firstLine.trim()) {
+                    return;
+                }
+
+                const newFileName = sanitizeFileName(firstLine) + '.md';
+                const newFilePath = path.join(path.dirname(document.fileName), newFileName);
+
+                await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
+                await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+
+                fs.renameSync(document.fileName, newFilePath);
+
+                const newDocument = await vscode.workspace.openTextDocument(newFilePath);
+                vscode.window.showTextDocument(newDocument);
+                journalTreeViewProvider.refresh();
+                tagIndexManager.updateIndexForFile(newFilePath);
+                tagTreeViewProvider.refresh();
+                linkIndexManager.updateIndexForFile(newFilePath);
+                backlinksTreeViewProvider.refresh(newFilePath);
+            } else {
+                tagIndexManager.updateIndexForFile(document.uri.fsPath);
+                tagTreeViewProvider.refresh();
+                linkIndexManager.updateIndexForFile(document.uri.fsPath);
+                backlinksTreeViewProvider.refresh(document.uri.fsPath);
             }
-
-            const newFileName = sanitizeFileName(firstLine) + '.md';
-            const newFilePath = path.join(path.dirname(document.fileName), newFileName);
-
-            await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
-            await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-
-            fs.renameSync(document.fileName, newFilePath);
-
-            const newDocument = await vscode.workspace.openTextDocument(newFilePath);
-            vscode.window.showTextDocument(newDocument);
-            journalTreeViewProvider.refresh();
-            tagIndexManager.updateIndexForFile(newFilePath);
-            tagTreeViewProvider.refresh();
-            linkIndexManager.updateIndexForFile(newFilePath);
-            backlinksTreeViewProvider.refresh(newFilePath);
         }
-    });
+    }));
 
-    const refreshEntriesCommand = vscode.commands.registerCommand('md-journal.refreshEntries', () => {        journalTreeViewProvider.refresh();        updateStatusBar(statusBarItem);    });    context.subscriptions.push(newDailyEntryCommand, saveAsTemplateCommand, goToTodaysNoteCommand, onDidSaveTextDocumentListener, refreshEntriesCommand);    updateStatusBar(statusBarItem);    vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem));
+    disposables.push(vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem)));
 
-    // File system watcher for tag and link indexing
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.md');
-    watcher.onDidChange(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); });
-    watcher.onDidCreate(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); });
-    watcher.onDidDelete(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); });
-    context.subscriptions.push(watcher);
+    watcher.onDidChange(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); tagTreeViewProvider.refresh(); backlinksTreeViewProvider.refresh(); });
+    watcher.onDidCreate(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); tagTreeViewProvider.refresh(); backlinksTreeViewProvider.refresh(); });
+    watcher.onDidDelete(uri => { tagIndexManager.updateIndexForFile(uri.fsPath); linkIndexManager.updateIndexForFile(uri.fsPath); tagTreeViewProvider.refresh(); backlinksTreeViewProvider.refresh(); });
+    disposables.push(watcher);
 
-    // Refresh tag and link views when journal path changes
-    vscode.workspace.onDidChangeConfiguration(event => {
-        if (event.affectsConfiguration('md-journal.journalPath')) {
-            const newJournalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
-            tagIndexManager.setJournalPath(newJournalPath);
-            tagIndexManager.initializeIndex();
-            tagTreeViewProvider.refresh();
-            linkIndexManager.setJournalPath(newJournalPath);
-            linkIndexManager.initializeIndex();
-            backlinksTreeViewProvider.refresh();
-        }
-    });
-
-    // Update backlinks panel when active editor changes
-    vscode.window.onDidChangeActiveTextEditor(editor => {
+    disposables.push(vscode.window.onDidChangeActiveTextEditor(editor => {
         const journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
         if (editor && editor.document.languageId === 'markdown' && editor.document.uri.fsPath.startsWith(journalPath)) {
             backlinksTreeViewProvider.refresh(editor.document.uri.fsPath);
         } else {
-            backlinksTreeViewProvider.refresh(); // Clear the view
+            backlinksTreeViewProvider.refresh();
         }
-    });
+    }));
 
-    // Initial call to set up backlinks view
     if (vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.languageId === 'markdown' && vscode.window.activeTextEditor.document.uri.fsPath.startsWith(journalPath)) {
         backlinksTreeViewProvider.refresh(vscode.window.activeTextEditor.document.uri.fsPath);
     }
+
+    context.subscriptions.push(...disposables);
 }
 
-async function getJournalPath(): Promise<string | undefined> {
+export async function activate(context: vscode.ExtensionContext) {
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async event => {
+        if (event.affectsConfiguration('md-journal.journalPath')) {
+            const newJournalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
+            await initialize(context, newJournalPath);
+        }
+        if (event.affectsConfiguration('md-journal.folderStructure')) {
+            folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MMMM/DD-dddd');
+            if (journalTreeViewProvider) {
+                journalTreeViewProvider.refresh();
+            }
+        }
+    }));
+
+    let journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath');
+    if (!journalPath) {
+        journalPath = await getJournalPath(true);
+        if (!journalPath) {
+            return;
+        }
+    }
+
+    await initialize(context, journalPath);
+}
+
+async function getJournalPath(force: boolean = false): Promise<string | undefined> {
     let journalPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath');
 
-    if (!journalPath) {
+    if (!journalPath || force) {
         const result = await vscode.window.showOpenDialog({
             canSelectFiles: false,
             canSelectFolders: true,
@@ -257,11 +293,10 @@ function updateStatusBar(statusBarItem: vscode.StatusBarItem) {
     }
 
     const today = new Date();
-    const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MM-DD');
     const folderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
 
     if (fs.existsSync(folderPath) && fs.readdirSync(folderPath).filter(file => file.endsWith('.md')).length > 0) {
-        statusBarItem.text = `$(check) Today\'s Note`;
+        statusBarItem.text = `$(check) Today's Note`;
         statusBarItem.command = 'md-journal.goToTodaysNote';
         statusBarItem.show();
     } else {
@@ -278,11 +313,13 @@ function getFormattedTimestamp(date: Date, format: string): string {
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
     const seconds = date.getSeconds().toString().padStart(2, '0');
+    const dayOfWeek = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date);
 
     return format
         .replace('YYYY', year.toString())
         .replace('MM', month)
         .replace('DD', day)
+        .replace('dddd', dayOfWeek)
         .replace('HH', hours)
         .replace('mm', minutes)
         .replace('ss', seconds);
@@ -290,24 +327,28 @@ function getFormattedTimestamp(date: Date, format: string): string {
 
 function getJournalFolderPath(date: Date, folderStructure: string): string {
     const year = date.getFullYear().toString();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
+    const monthNumber = (date.getMonth() + 1).toString().padStart(2, '0');
+    const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(date);
+    const dayNumber = date.getDate().toString().padStart(2, '0');
+    const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date);
 
     let folderPath = folderStructure
         .replace('YYYY', year)
-        .replace('MM', month)
-        .replace('DD', day);
+        .replace('MMMM', monthName)
+        .replace('MM', monthNumber)
+        .replace('dddd', dayName)
+        .replace('DD', dayNumber);
 
-    // Replace any custom separators (like '>') with the system\'s path separator
     folderPath = folderPath.replace(/>/g, path.sep);
 
     return folderPath;
 }
 
 function sanitizeFileName(name: string): string {
-    // Remove markdown heading characters and other invalid filename characters
     const sanitized = name.replace(/^[#\s]+/, '').replace(/[<>:"/\\|?*]/g, '');
     return sanitized.replace(/\s/g, '-').toLowerCase();
 }
 
-export function deactivate() {}
+export function deactivate() {
+    disposables.forEach(d => d.dispose());
+}
