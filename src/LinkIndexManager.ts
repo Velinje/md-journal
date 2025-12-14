@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getAllMarkdownFiles } from './utilities';
+import { getAllMarkdownFiles } from './filesystem';
+import { getJournalPath } from './settings';
 
 interface LinkIndex {
     [filePath: string]: {
@@ -80,7 +81,7 @@ export class LinkIndexManager {
     }
 
     private async resolveLinkPath(sourceFilePath: string, linkTitle: string): Promise<string | undefined> {
-        const journalRoot = this.journalPath;
+        const journalRoot = getJournalPath();
         if (!journalRoot) {
             return undefined;
         }

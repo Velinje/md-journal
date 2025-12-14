@@ -33,7 +33,6 @@
   "categories": [
     "Other"
   ],
-
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [

@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getAllMarkdownFiles } from './utilities';
+import { getAllMarkdownFiles } from './filesystem';
+import { getJournalPath } from './settings';
 
 interface TagIndex { [tag: string]: string[]; }
 

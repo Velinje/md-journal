@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getFolderStructure, getJournalPath } from './settings';
 
 class FolderTreeItem extends vscode.TreeItem {
     constructor(
@@ -38,8 +39,8 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
             return Promise.resolve([messageItem]);
         }
 
-        const folderStructure = vscode.workspace.getConfiguration('md-journal').get<string>('folderStructure', 'YYYY/MMMM/DD-dddd');
-        const components = folderStructure.split(/[\/>]/);
+        const folderStructure = getFolderStructure();
+        const components = folderStructure.split(/[\/]/);
 
         if (element) {
             if (element.contextValue === 'folder') {
@@ -143,14 +144,14 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
     }
 
     private getDateFromPath(folderPath: string, folderStructure: string): Date | null {
-        const journalPath = this.journalPath;
+        const journalPath = getJournalPath();
         if (!journalPath) {
             return null;
         }
     
         const relativePath = path.relative(journalPath, folderPath);
         const pathParts = relativePath.split(path.sep);
-        const structureParts = folderStructure.split(/[\/>]/);
+        const structureParts = folderStructure.split(/[\/]/);
     
         let year, month, day;
     
