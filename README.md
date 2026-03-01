@@ -13,6 +13,37 @@ This is a VS Code extension that leverages the built-in markdown editing capabil
 *   **Template Management:** Create and use templates directly from your journal folder. Templates are stored in a `.templates` subfolder within your journal path.
 *   **Backlinks/Wikilinks:** Supports `[[wiki-link]]` style linking between notes, with a dedicated sidebar view to show notes linking to the current file.
 
+## Features & Command Reference
+
+### Journal Entry Commands
+- **Create Today’s Entry:**  
+	Open the Command Palette (`Ctrl+Shift+P`), run `MD Journal: Create Today's Entry`.  
+	- Creates a new entry for today using your configured template.
+	- If the entry exists, opens it.
+
+- **Open Journal Sidebar:**  
+	Use `MD Journal: Show Sidebar` to view Entries, Tags, and Backlinks.
+
+### Tags
+- Add tags anywhere in your entry using `#tagname` (e.g., `#work`, `#idea`).
+- Tags are automatically indexed and shown in the Tags sidebar.
+- Click a tag in the sidebar to see all entries containing it.
+
+### Backlinks (Wikilinks)
+- Create links to other entries using `[[Entry Title]]`.
+- Backlinks are indexed and shown in the Backlinks sidebar.
+- Click a backlink to navigate to the referenced entry.
+
+### Templates & Variables
+- Templates are stored in the `.templates` folder in your journal path.
+- When creating a new entry, the default template is used.
+- Supported template variables:
+	- `{date}`: Replaced with the entry’s date (e.g., `2025-08-09`).
+
+### Settings
+- **Journal Path:** Set the root folder for your journal.
+- **Folder Structure:** Customize with placeholders (`YYYY`, `MM`, `DD`).
+- **File Header Format:** Define the default header for new entries.
 ## Usage
 
 On first run, the extension will prompt you to select a root directory for your journal.
