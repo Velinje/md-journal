@@ -19,3 +19,22 @@ export async function getAllMarkdownFiles(dir: string): Promise<string[]> {
     }
     return markdownFiles;
 }
+
+export function getAllMarkdownFilesSync(dir: string): string[] {
+    let markdownFiles: string[] = [];
+    if (!fs.existsSync(dir)) {
+        return markdownFiles;
+    }
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            if (entry.name !== '.templates') {
+                markdownFiles = markdownFiles.concat(getAllMarkdownFilesSync(fullPath));
+            }
+        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+            markdownFiles.push(fullPath);
+        }
+    }
+    return markdownFiles;
+}

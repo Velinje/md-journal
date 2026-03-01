@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { JournalTreeViewProvider } from './JournalTreeView';
-import { TagIndexManager } from './TagIndexManager';
-import { LinkIndexManager } from './LinkIndexManager';
+import { IndexService } from './services/IndexService';
 import { BacklinksTreeViewProvider } from './BacklinksTreeView';
 import { getJournalFolderPath, getFormattedTimestamp } from './date';
 import { sanitizeFileName } from './string';
@@ -15,8 +14,7 @@ export function registerCommands(
     context: vscode.ExtensionContext,
     journalPath: string,
     journalTreeViewProvider: JournalTreeViewProvider,
-    tagIndexManager: TagIndexManager,
-    linkIndexManager: LinkIndexManager,
+    indexService: IndexService,
     backlinksTreeViewProvider: BacklinksTreeViewProvider,
     statusBarItem: vscode.StatusBarItem,
     getJournalPath: (force?: boolean) => Promise<string | undefined>,
@@ -32,10 +30,11 @@ export function registerCommands(
 
         const templateFolder = path.join(journalPath, '.templates');
         if (!fs.existsSync(templateFolder)) {
-            fs.mkdirSync(templateFolder, { recursive: true });
+            await fs.promises.mkdir(templateFolder, { recursive: true });
         }
 
-        const templates = fs.readdirSync(templateFolder).filter(file => file.endsWith('.md'));
+        const templatesList = await fs.promises.readdir(templateFolder);
+        const templates = templatesList.filter(file => file.endsWith('.md'));
         let selectedTemplateContent = '';
 
         if (templates.length > 0) {
@@ -43,7 +42,7 @@ export function registerCommands(
             const selectedTemplate = await vscode.window.showQuickPick(templateQuickPickItems, { placeHolder: 'Select a template or press Esc for a blank note' });
 
             if (selectedTemplate) {
-                selectedTemplateContent = fs.readFileSync(path.join(templateFolder, selectedTemplate.description), 'utf8');
+                selectedTemplateContent = await fs.promises.readFile(path.join(templateFolder, selectedTemplate.description), 'utf8');
             }
         }
 
@@ -51,7 +50,7 @@ export function registerCommands(
         const fullFolderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
 
         if (!fs.existsSync(fullFolderPath)) {
-            fs.mkdirSync(fullFolderPath, { recursive: true });
+            await fs.promises.mkdir(fullFolderPath, { recursive: true });
         }
 
         const fileName = 'daily-note.md';
@@ -66,14 +65,13 @@ export function registerCommands(
             fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}\n\n`;
         }
 
-        fs.writeFileSync(filePath, fileContent);
+        await fs.promises.writeFile(filePath, fileContent);
         journalTreeViewProvider.refresh();
 
         const document = await vscode.workspace.openTextDocument(filePath);
         vscode.window.showTextDocument(document);
-        updateStatusBar(statusBarItem, folderStructure, journalPath);
-        tagIndexManager.updateIndexForFile(filePath);
-        linkIndexManager.updateIndexForFile(filePath);
+        await updateStatusBar(statusBarItem, folderStructure, journalPath);
+        indexService.updateIndexForFile(filePath);
         backlinksTreeViewProvider.refresh(filePath);
     }));
 
@@ -92,7 +90,7 @@ export function registerCommands(
 
         const templateFolder = path.join(journalPath, '.templates');
         if (!fs.existsSync(templateFolder)) {
-            fs.mkdirSync(templateFolder, { recursive: true });
+            await fs.promises.mkdir(templateFolder, { recursive: true });
         }
 
         const templateName = await vscode.window.showInputBox({
@@ -114,7 +112,7 @@ export function registerCommands(
         }
 
         const templateFilePath = path.join(templateFolder, `${templateName}.md`);
-        fs.writeFileSync(templateFilePath, contentToSave);
+        await fs.promises.writeFile(templateFilePath, contentToSave);
         vscode.window.showInformationMessage(`Template '${templateName}' saved successfully!`);
     }));
 
@@ -132,7 +130,8 @@ export function registerCommands(
             return;
         }
 
-        const files = fs.readdirSync(folderPath).filter(file => file.endsWith('.md'));
+        const dirContents = await fs.promises.readdir(folderPath);
+        const files = dirContents.filter(file => file.endsWith('.md'));
 
         if (files.length === 0) {
             const selection = await vscode.window.showInformationMessage('No note found for today.', 'Create One');
@@ -154,9 +153,9 @@ export function registerCommands(
         }
     }));
 
-    disposables.push(vscode.commands.registerCommand('md-journal.refreshEntries', () => {
-        journalTreeViewProvider.refresh();
-        updateStatusBar(statusBarItem, folderStructure, journalPath);
+    disposables.push(vscode.commands.registerCommand('md-journal.refreshEntries', async () => {
+        await indexService.initializeIndex();
+        await updateStatusBar(statusBarItem, folderStructure, journalPath);
     }));
 
     disposables.push(vscode.commands.registerCommand('md-journal.searchEntries', async () => {
@@ -202,10 +201,8 @@ export function registerCommands(
         try {
             await vscode.workspace.fs.rename(uri, newUri);
             journalTreeViewProvider.refresh();
-            tagIndexManager.updateIndexForFile(uri.fsPath, false);
-            tagIndexManager.updateIndexForFile(newUri.fsPath, true);
-            linkIndexManager.updateIndexForFile(uri.fsPath, false);
-            linkIndexManager.updateIndexForFile(newUri.fsPath, true);
+            await indexService.updateIndexForFile(uri.fsPath, false);
+            await indexService.updateIndexForFile(newUri.fsPath, true);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to rename file: ${error}`);
         }
@@ -225,8 +222,7 @@ export function registerCommands(
             try {
                 await vscode.workspace.fs.delete(uri);
                 journalTreeViewProvider.refresh();
-                tagIndexManager.updateIndexForFile(uri.fsPath, true);
-                linkIndexManager.updateIndexForFile(uri.fsPath, true);
+                await indexService.updateIndexForFile(uri.fsPath, true);
             } catch (error) {
                 vscode.window.showErrorMessage(`Failed to delete file: ${error}`);
             }

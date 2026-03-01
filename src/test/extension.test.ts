@@ -39,20 +39,18 @@ suite('Extension Test Suite', () => {
         fs.writeFileSync(file2Path, 'This is another test file with a #tag2 and a [[link2]].');
 
         // Let the index managers see the new journal path and index the files
-        api.tagIndexManager.setJournalPath(testJournalPath);
-        api.linkIndexManager.setJournalPath(testJournalPath);
-        await api.tagIndexManager.initializeIndex();
-        await api.linkIndexManager.initializeIndex();
+        api.indexService.setJournalPath(testJournalPath);
+        await api.indexService.initializeIndex();
 
-        const tag1Files = api.tagIndexManager.getFilesForTag('tag1');
+        const tag1Files = api.indexService.getFilesForTag('tag1');
         assert.strictEqual(tag1Files.length, 1, 'tag1 should have one file');
         assert.strictEqual(tag1Files[0], file1Path, 'tag1 file path should be correct');
 
-        const tag2Files = api.tagIndexManager.getFilesForTag('tag2');
+        const tag2Files = api.indexService.getFilesForTag('tag2');
         assert.strictEqual(tag2Files.length, 1, 'tag2 should have one file');
         assert.strictEqual(tag2Files[0], file2Path, 'tag2 file path should be correct');
 
-        const backlinksToLink1 = api.linkIndexManager.getBacklinks(path.join(testJournalPath, 'link1.md'));
+        const backlinksToLink1 = api.indexService.getBacklinks(path.join(testJournalPath, 'link1.md'));
         assert.strictEqual(backlinksToLink1.length, 1, 'link1 should have one backlink');
         assert.strictEqual(backlinksToLink1[0], file1Path, 'link1 backlink path should be correct');
 

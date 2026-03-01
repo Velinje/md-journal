@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TagIndexManager } from './TagIndexManager';
+import { IndexService } from './services/IndexService';
 import * as path from 'path';
 import { getDateFromPath } from './date';
 import { getFolderStructure, getJournalPath } from './settings';
@@ -29,10 +29,11 @@ export class TagTreeViewProvider implements vscode.TreeDataProvider<TagTreeItem>
     private _onDidChangeTreeData: vscode.EventEmitter<TagTreeItem | undefined | void> = new vscode.EventEmitter<TagTreeItem | undefined | void>();
     readonly onDidChangeTreeData: vscode.Event<TagTreeItem | undefined | void> = this._onDidChangeTreeData.event;
 
-    private tagIndexManager: TagIndexManager;
+    private indexService: IndexService;
 
-    constructor(tagIndexManager: TagIndexManager) {
-        this.tagIndexManager = tagIndexManager;
+    constructor(indexService: IndexService) {
+        this.indexService = indexService;
+        this.indexService.onIndexUpdated(() => this.refresh());
     }
 
     refresh(): void {
@@ -54,12 +55,11 @@ export class TagTreeViewProvider implements vscode.TreeDataProvider<TagTreeItem>
 
         if (element) {
             if (element.type === 'year') {
-                // Show tags for this year
-                const allTags = this.tagIndexManager.getTags();
+                const allTags = this.indexService.getTags();
                 const tagsInYear: string[] = [];
 
                 for (const tag of allTags) {
-                    const files = this.tagIndexManager.getFilesForTag(tag);
+                    const files = this.indexService.getFilesForTag(tag);
                     const filesInYear = files.filter(f => this.getFileYear(f, folderStructure, journalPath) === element.year);
                     if (filesInYear.length > 0) {
                         tagsInYear.push(tag);
@@ -68,18 +68,16 @@ export class TagTreeViewProvider implements vscode.TreeDataProvider<TagTreeItem>
 
                 return tagsInYear.map(tag => new TagTreeItem(tag, vscode.TreeItemCollapsibleState.Collapsed, 'tag', element.year, tag));
             } else if (element.type === 'tag') {
-                // Show files for this tag and year
-                const files = this.tagIndexManager.getFilesForTag(element.tag!).filter(f => this.getFileYear(f, folderStructure, journalPath) === element.year);
+                const files = this.indexService.getFilesForTag(element.tag!).filter(f => this.getFileYear(f, folderStructure, journalPath) === element.year);
                 return files.map(file => new TagTreeItem(path.basename(file), vscode.TreeItemCollapsibleState.None, 'file', element.year, element.tag, vscode.Uri.file(file)));
             }
             return [];
         } else {
-            // Root level: Show all years
-            const tags = this.tagIndexManager.getTags();
+            const tags = this.indexService.getTags();
             const years = new Set<string>();
 
             for (const tag of tags) {
-                const files = this.tagIndexManager.getFilesForTag(tag);
+                const files = this.indexService.getFilesForTag(tag);
                 for (const file of files) {
                     years.add(this.getFileYear(file, folderStructure, journalPath));
                 }
@@ -87,8 +85,8 @@ export class TagTreeViewProvider implements vscode.TreeDataProvider<TagTreeItem>
 
             const currentYearStr = new Date().getFullYear().toString();
             return Array.from(years).sort((a, b) => b.localeCompare(a)).map(year => {
-                const isCurrentYear = year === currentYearStr;
-                return new TagTreeItem(year, isCurrentYear ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed, 'year', year);
+                const isCurrentOrPrevYear = year === currentYearStr || year === (new Date().getFullYear() - 1).toString();
+                return new TagTreeItem(year, isCurrentOrPrevYear ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed, 'year', year);
             });
         }
     }

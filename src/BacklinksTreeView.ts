@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { LinkIndexManager } from './LinkIndexManager';
+import { IndexService } from './services/IndexService';
 import * as path from 'path';
 
 export class BacklinkTreeItem extends vscode.TreeItem {
@@ -18,16 +18,28 @@ export class BacklinksTreeViewProvider implements vscode.TreeDataProvider<Backli
     private _onDidChangeTreeData: vscode.EventEmitter<BacklinkTreeItem | undefined | void> = new vscode.EventEmitter<BacklinkTreeItem | undefined | void>();
     readonly onDidChangeTreeData: vscode.Event<BacklinkTreeItem | undefined | void> = this._onDidChangeTreeData.event;
 
-    private linkIndexManager: LinkIndexManager;
+    private indexService: IndexService;
     private currentFileBacklinks: string[] = [];
 
-    constructor(linkIndexManager: LinkIndexManager) {
-        this.linkIndexManager = linkIndexManager;
+    constructor(indexService: IndexService) {
+        this.indexService = indexService;
+
+        const handleEditorChange = () => {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && editor.document.languageId === 'markdown') {
+                this.refresh(editor.document.uri.fsPath);
+            } else {
+                this.refresh();
+            }
+        };
+
+        this.indexService.onIndexUpdated(handleEditorChange);
+        vscode.window.onDidChangeActiveTextEditor(handleEditorChange);
     }
 
     refresh(filePath?: string): void {
         if (filePath) {
-            this.currentFileBacklinks = this.linkIndexManager.getBacklinks(filePath);
+            this.currentFileBacklinks = this.indexService.getBacklinks(filePath);
         } else {
             this.currentFileBacklinks = [];
         }

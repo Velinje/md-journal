@@ -23,6 +23,15 @@
     "daily notes",
     "productivity"
   ],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "sponsor": {
+    "url": "https://github.com/sponsors/Velinje"
+  },
   "author": {
     "name": "Andreas Gillberg",
     "url": "https://github.com/Velinje"
@@ -34,6 +43,9 @@
     "Other"
   ],
   "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
   "contributes": {
     "commands": [
       {
@@ -175,7 +187,8 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:perf": "vscode-test --run out/test/performance.test.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

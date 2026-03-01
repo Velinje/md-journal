@@ -12,3 +12,7 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+test_output.log
+.gemini-instructions.md
+CONSTITUTION.md
+DEVELOPMENT_NOTES.md
