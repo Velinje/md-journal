@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getDateFromPath } from './date';
 import { getFolderStructure, getJournalPath } from './settings';
 
 class FolderTreeItem extends vscode.TreeItem {
@@ -19,7 +20,7 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
     private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
-    constructor(private journalPath: string | undefined) {}
+    constructor(private journalPath: string | undefined) { }
 
     refresh(): void {
         this._onDidChangeTreeData.fire();
@@ -65,10 +66,10 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
                     const bPath = path.join(currentPath, b);
                     const aIsDir = fs.statSync(aPath).isDirectory();
                     const bIsDir = fs.statSync(bPath).isDirectory();
-                
+
                     if (aIsDir && bIsDir) {
-                        const aDate = this.getDateFromPath(aPath, folderStructure);
-                        const bDate = this.getDateFromPath(bPath, folderStructure);
+                        const aDate = getDateFromPath(aPath, folderStructure, this.journalPath || '');
+                        const bDate = getDateFromPath(bPath, folderStructure, this.journalPath || '');
                         if (aDate && bDate) {
                             return bDate.getTime() - aDate.getTime();
                         }
@@ -84,6 +85,8 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
                         }
                         else {
                             const treeItem = new vscode.TreeItem(child, vscode.TreeItemCollapsibleState.None);
+                            treeItem.contextValue = 'file';
+                            treeItem.resourceUri = vscode.Uri.file(childPath);
                             treeItem.command = {
                                 command: 'vscode.open',
                                 title: 'Open File',
@@ -107,8 +110,8 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
                 const fullPath = path.join(rootPath, file);
                 return fs.statSync(fullPath).isDirectory() && this.matchesComponentPattern(file, firstLevelComponent);
             }).sort((a, b) => {
-                const aDate = this.getDateFromPath(path.join(rootPath, a), folderStructure);
-                const bDate = this.getDateFromPath(path.join(rootPath, b), folderStructure);
+                const aDate = getDateFromPath(path.join(rootPath, a), folderStructure, this.journalPath || '');
+                const bDate = getDateFromPath(path.join(rootPath, b), folderStructure, this.journalPath || '');
                 if (aDate && bDate) {
                     return bDate.getTime() - aDate.getTime();
                 }
@@ -129,76 +132,18 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
     private matchesComponentPattern(name: string, component: string): boolean {
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
+
         let regexString = component
             .replace('YYYY', '\\d{4}')
             .replace('MMMM', `(${monthNames.join('|')})`)
             .replace('MM', '\\d{2}')
             .replace('dddd', `(${dayNames.join('|')})`)
             .replace('DD', '\\d{2}');
-    
+
         regexString = `^${regexString}$`;
-    
+
         const regex = new RegExp(regexString);
         return regex.test(name);
     }
 
-    private getDateFromPath(folderPath: string, folderStructure: string): Date | null {
-        const journalPath = getJournalPath();
-        if (!journalPath) {
-            return null;
-        }
-    
-        const relativePath = path.relative(journalPath, folderPath);
-        const pathParts = relativePath.split(path.sep);
-        const structureParts = folderStructure.split(/[\/]/);
-    
-        let year, month, day;
-    
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    
-        for (let i = 0; i < structureParts.length; i++) {
-            const sPart = structureParts[i];
-            const pPart = pathParts[i];
-            if (!pPart) {
-                continue;
-            }
-    
-            const yyyy = sPart.includes('YYYY');
-            const mmmm = sPart.includes('MMMM');
-            const mm = sPart.includes('MM');
-            const dd = sPart.includes('DD');
-    
-            const regexStr = '^' + sPart
-                .replace('YYYY', '(\\d{4})')
-                .replace('MMMM', `(${monthNames.join('|')})`)
-                .replace('MM', '(\\d{2})')
-                .replace('dddd', '[a-zA-Z]+')
-                .replace('DD', '(\\d{2})') + '$';
-            
-            const matches = pPart.match(new RegExp(regexStr));
-            if (!matches) {
-                continue;
-            }
-    
-            let matchIndex = 1;
-            if (yyyy) {
-                year = parseInt(matches[matchIndex++]);
-            }
-            if (mmmm) {
-                month = monthNames.indexOf(matches[matchIndex++]);
-            } else if (mm) {
-                month = parseInt(matches[matchIndex++]) - 1;
-            }
-            if (dd) {
-                day = parseInt(matches[matchIndex++]);
-            }
-        }
-    
-        if (year !== undefined) {
-            return new Date(year, month !== undefined ? month : 0, day !== undefined ? day : 1);
-        }
-    
-        return null;
-    }
 }

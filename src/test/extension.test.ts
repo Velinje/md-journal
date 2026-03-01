@@ -29,15 +29,20 @@ suite('Extension Test Suite', () => {
             fs.mkdirSync(testJournalPath);
         }
 
+        await vscode.workspace.getConfiguration('md-journal').update('journalPath', testJournalPath, vscode.ConfigurationTarget.Global);
+        await new Promise(resolve => setTimeout(resolve, 500)); // wait for config propagation
+
         const file1Path = path.join(testJournalPath, 'file1.md');
         fs.writeFileSync(file1Path, 'This is a test file with a #tag1 and a [[link1]].');
 
         const file2Path = path.join(testJournalPath, 'file2.md');
         fs.writeFileSync(file2Path, 'This is another test file with a #tag2 and a [[link2]].');
 
-        await vscode.workspace.getConfiguration('md-journal').update('journalPath', testJournalPath, vscode.ConfigurationTarget.Global);
-
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Let the index managers see the new journal path and index the files
+        api.tagIndexManager.setJournalPath(testJournalPath);
+        api.linkIndexManager.setJournalPath(testJournalPath);
+        await api.tagIndexManager.initializeIndex();
+        await api.linkIndexManager.initializeIndex();
 
         const tag1Files = api.tagIndexManager.getFilesForTag('tag1');
         assert.strictEqual(tag1Files.length, 1, 'tag1 should have one file');

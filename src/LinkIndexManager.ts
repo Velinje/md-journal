@@ -58,15 +58,17 @@ export class LinkIndexManager {
         const links = this.extractWikilinks(content);
 
         for (const linkTitle of links) {
-            const targetPath = await this.resolveLinkPath(filePath, linkTitle);
-            if (targetPath) {
-                this.linkIndex[filePath].linksTo.push(targetPath);
-                if (!this.linkIndex[targetPath]) {
-                    this.linkIndex[targetPath] = { linksTo: [], linkedFrom: [] };
-                }
-                if (!this.linkIndex[targetPath].linkedFrom.includes(filePath)) {
-                    this.linkIndex[targetPath].linkedFrom.push(filePath);
-                }
+            let targetPath = await this.resolveLinkPath(filePath, linkTitle);
+            if (!targetPath) {
+                const journalRoot = getJournalPath() || this.journalPath;
+                targetPath = path.join(journalRoot, `${linkTitle}.md`);
+            }
+            this.linkIndex[filePath].linksTo.push(targetPath);
+            if (!this.linkIndex[targetPath]) {
+                this.linkIndex[targetPath] = { linksTo: [], linkedFrom: [] };
+            }
+            if (!this.linkIndex[targetPath].linkedFrom.includes(filePath)) {
+                this.linkIndex[targetPath].linkedFrom.push(filePath);
             }
         }
         if (save) {

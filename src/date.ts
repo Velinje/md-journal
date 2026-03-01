@@ -33,7 +33,63 @@ export function getJournalFolderPath(date: Date, folderStructure: string): strin
         .replace('dddd', dayName)
         .replace('DD', dayNumber);
 
-    folderPath = folderPath.replace(/>/g, path.sep);
-
     return folderPath;
+}
+
+export function getDateFromPath(folderPath: string, folderStructure: string, journalPath: string): Date | null {
+    if (!journalPath) {
+        return null;
+    }
+
+    const relativePath = path.relative(journalPath, folderPath);
+    const pathParts = relativePath.split(path.sep);
+    const structureParts = folderStructure.split(/[\/\\]/);
+
+    let year, month, day;
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    for (let i = 0; i < structureParts.length; i++) {
+        const sPart = structureParts[i];
+        const pPart = pathParts[i];
+        if (!pPart) {
+            continue;
+        }
+
+        const yyyy = sPart.includes('YYYY');
+        const mmmm = sPart.includes('MMMM');
+        const mm = sPart.includes('MM');
+        const dd = sPart.includes('DD');
+
+        const regexStr = '^' + sPart
+            .replace('YYYY', '(\\d{4})')
+            .replace('MMMM', `(${monthNames.join('|')})`)
+            .replace('MM', '(\\d{2})')
+            .replace('dddd', '[a-zA-Z]+')
+            .replace('DD', '(\\d{2})') + '$';
+
+        const matches = pPart.match(new RegExp(regexStr));
+        if (!matches) {
+            continue;
+        }
+
+        let matchIndex = 1;
+        if (yyyy) {
+            year = parseInt(matches[matchIndex++]);
+        }
+        if (mmmm) {
+            month = monthNames.indexOf(matches[matchIndex++]);
+        } else if (mm) {
+            month = parseInt(matches[matchIndex++]) - 1;
+        }
+        if (dd) {
+            day = parseInt(matches[matchIndex++]);
+        }
+    }
+
+    if (year !== undefined) {
+        return new Date(year, month !== undefined ? month : 0, day !== undefined ? day : 1);
+    }
+
+    return null;
 }

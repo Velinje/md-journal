@@ -9,6 +9,7 @@ import { getJournalFolderPath, getFormattedTimestamp } from './date';
 import { sanitizeFileName } from './string';
 import { updateStatusBar } from './listeners';
 import { getFileHeaderFormat, getJournalPath as getJournalPathSetting } from './settings';
+import { getAllMarkdownFiles } from './filesystem';
 
 export function registerCommands(
     context: vscode.ExtensionContext,
@@ -156,6 +157,80 @@ export function registerCommands(
     disposables.push(vscode.commands.registerCommand('md-journal.refreshEntries', () => {
         journalTreeViewProvider.refresh();
         updateStatusBar(statusBarItem, folderStructure, journalPath);
+    }));
+
+    disposables.push(vscode.commands.registerCommand('md-journal.searchEntries', async () => {
+        const currentJournalPath = getJournalPathSetting();
+        if (!currentJournalPath) { return; }
+        const files = await getAllMarkdownFiles(currentJournalPath);
+        if (files.length === 0) {
+            vscode.window.showInformationMessage('No journal entries found.');
+            return;
+        }
+
+        const items = files.map(file => {
+            const relativePath = path.relative(currentJournalPath, file);
+            return {
+                label: path.basename(file, '.md'),
+                description: relativePath,
+                file: file
+            };
+        });
+
+        const selected = await vscode.window.showQuickPick(items, { placeHolder: 'Search journal entries...' });
+        if (selected) {
+            const document = await vscode.workspace.openTextDocument(selected.file);
+            vscode.window.showTextDocument(document);
+        }
+    }));
+
+    disposables.push(vscode.commands.registerCommand('md-journal.renameEntry', async (node?: vscode.TreeItem) => {
+        if (!node || !node.resourceUri) { return; }
+
+        const uri = node.resourceUri;
+        const oldName = path.basename(uri.fsPath, '.md');
+        const newName = await vscode.window.showInputBox({
+            prompt: 'Enter new name for the entry',
+            value: oldName
+        });
+
+        if (!newName || newName === oldName) { return; }
+
+        const newFileName = newName.endsWith('.md') ? newName : `${newName}.md`;
+        const newUri = vscode.Uri.file(path.join(path.dirname(uri.fsPath), newFileName));
+
+        try {
+            await vscode.workspace.fs.rename(uri, newUri);
+            journalTreeViewProvider.refresh();
+            tagIndexManager.updateIndexForFile(uri.fsPath, false);
+            tagIndexManager.updateIndexForFile(newUri.fsPath, true);
+            linkIndexManager.updateIndexForFile(uri.fsPath, false);
+            linkIndexManager.updateIndexForFile(newUri.fsPath, true);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to rename file: ${error}`);
+        }
+    }));
+
+    disposables.push(vscode.commands.registerCommand('md-journal.deleteEntry', async (node?: vscode.TreeItem) => {
+        if (!node || !node.resourceUri) { return; }
+
+        const uri = node.resourceUri;
+        const confirm = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete ${path.basename(uri.fsPath)}?`,
+            { modal: true },
+            'Delete'
+        );
+
+        if (confirm === 'Delete') {
+            try {
+                await vscode.workspace.fs.delete(uri);
+                journalTreeViewProvider.refresh();
+                tagIndexManager.updateIndexForFile(uri.fsPath, true);
+                linkIndexManager.updateIndexForFile(uri.fsPath, true);
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to delete file: ${error}`);
+            }
+        }
     }));
 
     return disposables;

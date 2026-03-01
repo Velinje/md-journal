@@ -10,7 +10,9 @@ export async function getAllMarkdownFiles(dir: string): Promise<string[]> {
     for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
-            markdownFiles = markdownFiles.concat(await getAllMarkdownFiles(fullPath));
+            if (entry.name !== '.templates') {
+                markdownFiles = markdownFiles.concat(await getAllMarkdownFiles(fullPath));
+            }
         } else if (entry.isFile() && entry.name.endsWith('.md')) {
             markdownFiles.push(fullPath);
         }
