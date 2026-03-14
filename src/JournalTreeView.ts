@@ -202,4 +202,19 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
         return regex.test(name);
     }
 
+    async resolveTreeItem(item: vscode.TreeItem, element: vscode.TreeItem, token: vscode.CancellationToken): Promise<vscode.TreeItem> {
+        if (element.contextValue === 'file' && element.resourceUri && element.resourceUri.scheme === 'file') {
+            try {
+                const content = await fs.promises.readFile(element.resourceUri.fsPath, 'utf8');
+                const preview = content.split('\n').slice(0, 10).join('\n').trim();
+                const mdTooltip = new vscode.MarkdownString();
+                mdTooltip.appendMarkdown(`**${path.basename(element.resourceUri.fsPath)}**\n\n---\n\n`);
+                mdTooltip.appendCodeblock(preview, 'markdown');
+                element.tooltip = mdTooltip;
+            } catch (error) {
+                element.tooltip = element.resourceUri?.fsPath;
+            }
+        }
+        return element;
+    }
 }

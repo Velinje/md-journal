@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
-import { getAllMarkdownFiles, getAllMarkdownFilesSync } from '../filesystem';
+import { getAllMarkdownFiles } from '../filesystem';
 import { getJournalPath } from '../settings';
 
 interface TagIndex { [tag: string]: string[]; }
@@ -16,22 +15,22 @@ export class IndexService {
     private tagIndex: TagIndex = {};
     private linkIndex: LinkIndex = {};
 
-    // Map of filePath -> list of tags this file contains
     private fileToTags: { [filePath: string]: string[] } = {};
 
     private journalPath: string;
 
-    // Map of normalized link title -> absolute file path
     private cachedMdFiles: { [title: string]: string } | null = null;
 
-    // Flag to pause background watching during test mass-generation
-    public isPaused: boolean = false;
+    private context?: vscode.ExtensionContext;
+
+    public isInitializing: boolean = false;
 
     private _onIndexUpdated = new vscode.EventEmitter<void>();
     public readonly onIndexUpdated = this._onIndexUpdated.event;
 
-    constructor(journalPath: string) {
+    constructor(journalPath: string, context?: vscode.ExtensionContext) {
         this.journalPath = journalPath;
+        this.context = context;
     }
 
     public getTags(): string[] {
@@ -52,69 +51,105 @@ export class IndexService {
     }
 
     public async initializeIndex() {
-        this.tagIndex = {};
-        this.linkIndex = {};
-        this.fileToTags = {};
-        this.cachedMdFiles = null;
-
         if (!this.journalPath) { return; }
+        if (this.isInitializing) { return; }
 
-        const files = await getAllMarkdownFiles(this.journalPath);
-        this.cachedMdFiles = {};
-        for (const file of files) {
-            const normalizedTitle = path.basename(file, '.md').replace(/-/g, ' ');
-            this.cachedMdFiles[normalizedTitle] = file;
-        }
+        this.isInitializing = true;
+        try {
+            let lastSessionTime = 0;
+            if (this.context) {
+                const cachedData = this.context.workspaceState.get<{
+                    tagIndex: TagIndex,
+                    linkIndex: LinkIndex,
+                    fileToTags: { [filePath: string]: string[] },
+                    lastSessionTime: number
+                }>('mdJournal.indexCache');
 
-        // FAST BURST SYNC READ: for the massive initial load, async overhead of 2000+ files blocks V8.
-        // Doing a pure synchronous memory burst is vastly faster for immediate index generation.
-        for (const file of files) {
-            try {
-                const content = fs.readFileSync(file, 'utf8');
-
-                const tags = Array.from(new Set(this.extractTags(content)));
-                this.fileToTags[file] = tags;
-                for (const tag of tags) {
-                    if (!this.tagIndex[tag]) { this.tagIndex[tag] = []; }
-                    this.tagIndex[tag].push(file);
+                if (cachedData) {
+                    this.tagIndex = cachedData.tagIndex || {};
+                    this.linkIndex = cachedData.linkIndex || {};
+                    this.fileToTags = cachedData.fileToTags || {};
+                    lastSessionTime = cachedData.lastSessionTime || 0;
+                } else {
+                    this.tagIndex = {};
+                    this.linkIndex = {};
+                    this.fileToTags = {};
                 }
-
-                const links = this.extractWikilinks(content);
-                this.linkIndex[file] = { linksTo: [], linkedFrom: [] };
-
-                for (const linkTitle of links) {
-                    let targetPath = this.resolveLinkPath(file, linkTitle);
-                    if (!targetPath) {
-                        const journalRoot = getJournalPath() || this.journalPath;
-                        targetPath = path.join(journalRoot, `${linkTitle}.md`);
-                    }
-                    this.linkIndex[file].linksTo.push(targetPath);
-                    if (!this.linkIndex[targetPath]) {
-                        this.linkIndex[targetPath] = { linksTo: [], linkedFrom: [] };
-                    }
-
-                    // Optimization: We are processing files sequentially in initializeIndex.
-                    // Instead of an O(N) array includes() scan that grows to 2000 elements,
-                    // we can just check if the very last element is the current file.
-                    const linkedFromArr = this.linkIndex[targetPath].linkedFrom;
-                    if (linkedFromArr.length === 0 || linkedFromArr[linkedFromArr.length - 1] !== file) {
-                        linkedFromArr.push(file);
-                    }
-                }
-            } catch (e) {
-                console.error(`Error reading ${file} during initializeIndex`, e);
+            } else {
+                this.tagIndex = {};
+                this.linkIndex = {};
+                this.fileToTags = {};
             }
-        }
 
+            const files = await getAllMarkdownFiles(this.journalPath);
+
+            this.cachedMdFiles = {};
+            for (const file of files) {
+                const normalizedTitle = path.basename(file, '.md').replace(/-/g, ' ');
+                this.cachedMdFiles[normalizedTitle] = file;
+            }
+
+            const currentSessionTime = Date.now();
+            const currentFiles = new Set(files);
+            let hasUpdates = false;
+
+            const indexedFiles = Object.keys(this.linkIndex);
+            for (const indexedFile of indexedFiles) {
+                if (!currentFiles.has(indexedFile)) {
+                    await this.updateIndexForFile(indexedFile, false, true, true, true);
+                    hasUpdates = true;
+                }
+            }
+
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                try {
+                    const stat = await vscode.workspace.fs.stat(vscode.Uri.file(file));
+                    if (stat.mtime > lastSessionTime || !this.linkIndex[file]) {
+                        await this.updateIndexForFile(file, false, true, false, true);
+                        hasUpdates = true;
+                    }
+                } catch (e) {
+                    console.error(`Error stat ${file}`, e);
+                }
+
+                if (i % CHUNK_SIZE === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+
+            if (this.context && (hasUpdates || lastSessionTime === 0)) {
+                await this.saveCache(currentSessionTime);
+            }
+
+            this._onIndexUpdated.fire();
+        } finally {
+            this.isInitializing = false;
+        }
+    }
+
+    private async saveCache(sessionTime: number = Date.now()) {
+        if (this.context) {
+            await this.context.workspaceState.update('mdJournal.indexCache', {
+                tagIndex: this.tagIndex,
+                linkIndex: this.linkIndex,
+                fileToTags: this.fileToTags,
+                lastSessionTime: sessionTime
+            });
+        }
+    }
+
+    public async triggerSaveAndFire() {
+        await this.saveCache();
         this._onIndexUpdated.fire();
     }
 
-    public async updateIndexForFile(filePath: string, fireEvent: boolean = true, skipExistsCheck: boolean = false) {
-        if (this.isPaused) {
+    public async updateIndexForFile(filePath: string, fireEvent: boolean = true, skipExistsCheck: boolean = false, forceDelete: boolean = false, bypassInitCheck: boolean = false) {
+        if (this.isInitializing && !bypassInitCheck) {
             return;
         }
 
-        // Only touch tags we know this file previously had
         const previousTags = this.fileToTags[filePath] || [];
         for (const tag of previousTags) {
             if (this.tagIndex[tag]) {
@@ -126,7 +161,6 @@ export class IndexService {
         }
         delete this.fileToTags[filePath];
 
-        // Remove file from links
         const oldLinks = this.linkIndex[filePath]?.linksTo || [];
         for (const linkedToFile of oldLinks) {
             if (this.linkIndex[linkedToFile]) {
@@ -135,9 +169,11 @@ export class IndexService {
         }
 
         let fileExists = true;
-        if (!skipExistsCheck) {
+        if (forceDelete) {
+            fileExists = false;
+        } else if (!skipExistsCheck) {
             try {
-                await fs.promises.stat(filePath);
+                await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
             } catch {
                 fileExists = false;
             }
@@ -145,16 +181,19 @@ export class IndexService {
 
         if (!fileExists) {
             delete this.linkIndex[filePath];
-            if (fireEvent) { this._onIndexUpdated.fire(); }
+            if (fireEvent) {
+                await this.saveCache();
+                this._onIndexUpdated.fire();
+            }
             return;
         }
 
         this.linkIndex[filePath] = { linksTo: [], linkedFrom: this.linkIndex[filePath]?.linkedFrom || [] };
 
-        const content = await fs.promises.readFile(filePath, 'utf8');
+        const contentUint8Array = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+        const content = new TextDecoder('utf8').decode(contentUint8Array);
 
-        // Extract tags
-        const tags = Array.from(new Set(this.extractTags(content))); // Unique tags only
+        const tags = Array.from(new Set(this.extractTags(content)));
 
         this.fileToTags[filePath] = tags;
 
@@ -162,10 +201,11 @@ export class IndexService {
             if (!this.tagIndex[tag]) {
                 this.tagIndex[tag] = [];
             }
-            this.tagIndex[tag].push(filePath);
+            if (!this.tagIndex[tag].includes(filePath)) {
+                this.tagIndex[tag].push(filePath);
+            }
         }
 
-        // Extract Links
         const links = this.extractWikilinks(content);
         for (const linkTitle of links) {
             let targetPath = this.resolveLinkPath(filePath, linkTitle);
@@ -173,7 +213,9 @@ export class IndexService {
                 const journalRoot = getJournalPath() || this.journalPath;
                 targetPath = path.join(journalRoot, `${linkTitle}.md`);
             }
-            this.linkIndex[filePath].linksTo.push(targetPath);
+            if (!this.linkIndex[filePath].linksTo.includes(targetPath)) {
+                this.linkIndex[filePath].linksTo.push(targetPath);
+            }
             if (!this.linkIndex[targetPath]) {
                 this.linkIndex[targetPath] = { linksTo: [], linkedFrom: [] };
             }
@@ -183,6 +225,7 @@ export class IndexService {
         }
 
         if (fireEvent) {
+            await this.saveCache();
             this._onIndexUpdated.fire();
         }
     }
@@ -214,7 +257,6 @@ export class IndexService {
 
         const searchTitle = linkTitle.replace(/-/g, ' ');
 
-        // O(1) Dictionary Lookup
         return this.cachedMdFiles[searchTitle];
     }
 }

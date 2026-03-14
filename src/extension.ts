@@ -19,18 +19,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	const journalPath = getJournalPath();
+	let journalPath = getJournalPath();
+	const indexService = new IndexService(journalPath || '', context);
+
 	if (!journalPath) {
 		vscode.window.showInformationMessage('MD Journal: Journal path not set. Please set it in the settings.', 'Open Settings').then(selection => {
 			if (selection === 'Open Settings') {
 				vscode.commands.executeCommand('workbench.action.openSettings', 'md-journal.journalPath');
 			}
 		});
-		return;
+	} else {
+		await indexService.initializeIndex();
 	}
-
-	const indexService = new IndexService(journalPath);
-	await indexService.initializeIndex();
 
 	const journalTreeViewProvider = new JournalTreeViewProvider(journalPath, indexService);
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('md-journal-entries', journalTreeViewProvider));
@@ -56,19 +56,21 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(statusBarItem);
 
 	const folderStructure = getFolderStructure();
-	await updateStatusBar(statusBarItem, folderStructure, journalPath);
+	if (journalPath) {
+		await updateStatusBar(statusBarItem, folderStructure, journalPath);
+	}
 
-	const disposables = registerListeners(context, journalPath, indexService, statusBarItem, folderStructure);
+	const disposables = registerListeners(context, journalPath || '', indexService, statusBarItem, folderStructure);
 	disposables.forEach(disposable => context.subscriptions.push(disposable));
 
 	registerCommands(
 		context,
-		journalPath,
+		journalPath || '',
 		journalTreeViewProvider,
 		indexService,
 		backlinksTreeViewProvider,
 		statusBarItem,
-		async (force?: boolean) => getJournalPath(),
+		async (force?: boolean) => getJournalPath() || '',
 		folderStructure,
 	);
 

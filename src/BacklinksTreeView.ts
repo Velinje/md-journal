@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { IndexService } from './services/IndexService';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export class BacklinkTreeItem extends vscode.TreeItem {
     constructor(
@@ -10,7 +11,6 @@ export class BacklinkTreeItem extends vscode.TreeItem {
         public readonly command?: vscode.Command
     ) {
         super(label, collapsibleState);
-        this.tooltip = this.resourceUri.fsPath;
     }
 }
 
@@ -65,5 +65,21 @@ export class BacklinksTreeViewProvider implements vscode.TreeDataProvider<Backli
                 }))
             );
         }
+    }
+
+    async resolveTreeItem(item: BacklinkTreeItem, element: BacklinkTreeItem, token: vscode.CancellationToken): Promise<BacklinkTreeItem> {
+        if (element.resourceUri && element.resourceUri.scheme === 'file') {
+            try {
+                const content = await fs.promises.readFile(element.resourceUri.fsPath, 'utf8');
+                const preview = content.split('\n').slice(0, 10).join('\n').trim();
+                const mdTooltip = new vscode.MarkdownString();
+                mdTooltip.appendMarkdown(`**${path.basename(element.resourceUri.fsPath)}**\n\n---\n\n`);
+                mdTooltip.appendCodeblock(preview, 'markdown');
+                element.tooltip = mdTooltip;
+            } catch (error) {
+                element.tooltip = element.resourceUri.fsPath;
+            }
+        }
+        return element;
     }
 }

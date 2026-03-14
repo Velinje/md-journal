@@ -1,6 +1,20 @@
-# Change Log
+# Changelog
 
 All notable changes to the "md-journal" extension will be documented in this file.
+
+## 0.5.0
+
+### Performance & Architecture Overhaul
+- **Zero-Latency Indexing**: Migrated the internal index engine to use a persistent SQLite-backed Memento cache. The extension now performs differential updates—meaning it boots instantly and only reads files modified since your last session. 
+- **Remote Workspace Capability**: Fully migrated the internal file-system engine off native Node `fs` bindings and onto asynchronous `vscode.workspace.fs` APIs. The extension is now 100% compatible with remote SSH, Codespaces, and WSL configurations.
+- **Lazy-Loaded UI Rendering**: Significantly reduced the UI memory footprint by deferring markdown previews. Tree view hover tooltips are now constructed lazily only when you explicitly hover over a node.
+- **Unresponsive Host Protections**: Rewrote recursive directory scanning and file-watch loops using strict 300ms debouncing and explicit macrotask chunking. Performing massive bulk rename operations or indexing 2,000+ files will no longer freeze the VS Code Extension Host.
+- **Lightning-Fast Builds**: Replaced the legacy `esbuild` dependency with `rolldown` and `oxc-minify`, slashing the extension's bundled footprint down to ~37kB.
+
+## 0.4.0
+
+- **UX Enhancements**: Implemented intelligent auto-expansion of current Year and Month directory folders within the Journal and Tag tree views, saving you clicks when browsing recent entries.
+- **Release Polish**: Finalized the `package.json` manifest attributes, gallery colors, and extension icon for broader marketplace compatibility.
 
 ## 0.2.0
 
