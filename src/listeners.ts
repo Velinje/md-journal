@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
 import { IndexService } from './services/IndexService';
 import { sanitizeFileName } from './string';
 import { getJournalFolderPath } from './date';
@@ -28,9 +27,9 @@ export function registerListeners(
                 await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
                 await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
 
-                await fs.promises.rename(document.fileName, newFilePath);
+                await vscode.workspace.fs.rename(document.uri, vscode.Uri.file(newFilePath));
 
-                const newDocument = await vscode.workspace.openTextDocument(newFilePath);
+                const newDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(newFilePath));
                 vscode.window.showTextDocument(newDocument);
                 indexService.updateIndexForFile(newFilePath);
             } else {
@@ -42,9 +41,29 @@ export function registerListeners(
     disposables.push(vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem, folderStructure, journalPath)));
 
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.md');
-    const onFileChange = (uri: vscode.Uri) => {
-        indexService.updateIndexForFile(uri.fsPath);
+
+    const pendingChanges = new Set<string>();
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    const processPendingChanges = async () => {
+        const filesToProcess = Array.from(pendingChanges);
+        pendingChanges.clear();
+        for (const filePath of filesToProcess) {
+            await indexService.updateIndexForFile(filePath, false);
+        }
+        if (filesToProcess.length > 0) {
+            await indexService.triggerSaveAndFire();
+        }
     };
+
+    const onFileChange = (uri: vscode.Uri) => {
+        pendingChanges.add(uri.fsPath);
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+        }
+        debounceTimer = setTimeout(processPendingChanges, 300);
+    };
+
     watcher.onDidChange(onFileChange);
     watcher.onDidCreate(onFileChange);
     watcher.onDidDelete(onFileChange);
@@ -64,8 +83,8 @@ export async function updateStatusBar(statusBarItem: vscode.StatusBarItem, folde
 
     let hasTodayNote = false;
     try {
-        const files = await fs.promises.readdir(folderPath);
-        hasTodayNote = files.some(file => file.endsWith('.md'));
+        const files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(folderPath));
+        hasTodayNote = files.some(([file, type]) => file.endsWith('.md') && type === vscode.FileType.File);
     } catch { }
 
     if (hasTodayNote) {

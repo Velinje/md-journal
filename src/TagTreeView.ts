@@ -3,6 +3,7 @@ import { IndexService } from './services/IndexService';
 import * as path from 'path';
 import { getDateFromPath } from './date';
 import { getFolderStructure, getJournalPath } from './settings';
+import * as fs from 'fs';
 
 export class TagTreeItem extends vscode.TreeItem {
     constructor(
@@ -89,5 +90,21 @@ export class TagTreeViewProvider implements vscode.TreeDataProvider<TagTreeItem>
                 return new TagTreeItem(year, isCurrentOrPrevYear ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed, 'year', year);
             });
         }
+    }
+
+    async resolveTreeItem(item: TagTreeItem, element: TagTreeItem, token: vscode.CancellationToken): Promise<TagTreeItem> {
+        if (element.type === 'file' && element.fileUri && element.fileUri.scheme === 'file') {
+            try {
+                const content = await fs.promises.readFile(element.fileUri.fsPath, 'utf8');
+                const preview = content.split('\n').slice(0, 10).join('\n').trim();
+                const mdTooltip = new vscode.MarkdownString();
+                mdTooltip.appendMarkdown(`**${path.basename(element.fileUri.fsPath)}**\n\n---\n\n`);
+                mdTooltip.appendCodeblock(preview, 'markdown');
+                element.tooltip = mdTooltip;
+            } catch (error) {
+                element.tooltip = element.fileUri?.fsPath;
+            }
+        }
+        return element;
     }
 }
