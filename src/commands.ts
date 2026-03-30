@@ -1,180 +1,246 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+
 import { JournalTreeViewProvider } from './JournalTreeView';
 import { IndexService } from './services/IndexService';
 import { BacklinksTreeViewProvider } from './BacklinksTreeView';
 import { getJournalFolderPath, getFormattedTimestamp } from './date';
 import { sanitizeFileName } from './string';
 import { updateStatusBar } from './listeners';
-import { getFileHeaderFormat, getJournalPath as getJournalPathSetting } from './settings';
+import { getFileHeaderFormat, getJournalPath, verifyJournalPath, getFolderStructure } from './settings';
 import { getAllMarkdownFiles } from './filesystem';
 
 export function registerCommands(
     context: vscode.ExtensionContext,
-    journalPath: string,
     journalTreeViewProvider: JournalTreeViewProvider,
     indexService: IndexService,
     backlinksTreeViewProvider: BacklinksTreeViewProvider,
     statusBarItem: vscode.StatusBarItem,
-    getJournalPath: (force?: boolean) => Promise<string | undefined>,
-    folderStructure: string
+    folderStructure: string,
 ) {
     const disposables: vscode.Disposable[] = [];
 
-    disposables.push(vscode.commands.registerCommand('md-journal.newDailyEntry', async () => {
-        const journalPath = await getJournalPath();
-        if (!journalPath) {
-            return;
+    const setJournalPathCommand = async () => {
+        const suggestedUri = vscode.Uri.file(path.join(os.homedir(), 'md-journal'));
+        const uris = await vscode.window.showOpenDialog({
+            canSelectFolders: true,
+            canSelectFiles: false,
+            canSelectMany: false,
+            title: 'Select your MD Journal folder',
+            openLabel: 'Set as Journal Folder',
+            defaultUri: suggestedUri,
+        });
+
+        if (uris && uris.length > 0) {
+            const newPath = uris[0].fsPath;
+            await vscode.workspace.getConfiguration('md-journal').update('journalPath', newPath, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage(`Journal folder set to: ${newPath}`);
+            return newPath;
         }
+        return undefined;
+    };
+
+    const ensureValidPath = async (): Promise<string | undefined> => {
+        const jPath = getJournalPath();
+
+        if (!jPath) {
+            const choice = await vscode.window.showWarningMessage(
+                'MD Journal: No journal folder has been configured.',
+                'Set Journal Folder'
+            );
+            if (choice === 'Set Journal Folder') {
+                return await setJournalPathCommand();
+            }
+            return undefined;
+        }
+
+        const isValid = await verifyJournalPath(jPath);
+        if (isValid) {
+            return jPath;
+        }
+
+        try {
+            await vscode.workspace.fs.createDirectory(vscode.Uri.file(jPath));
+            return jPath;
+        } catch (error) {
+            const selection = await vscode.window.showErrorMessage(
+                `Failed to access or create MD Journal folder at '${jPath}'. Please select a different location.`,
+                { modal: true },
+                'Set Folder'
+            );
+            if (selection === 'Set Folder') {
+                return await setJournalPathCommand();
+            }
+            return undefined;
+        }
+    };
+
+    const resolveContextUri = async (arg?: any): Promise<vscode.Uri | undefined> => {
+        let uri: vscode.Uri | undefined;
+
+        if (arg && arg.resourceUri) {
+            uri = arg.resourceUri;
+        } else if (arg instanceof vscode.Uri) {
+            uri = arg;
+        } else if (vscode.window.activeTextEditor?.document.languageId === 'markdown') {
+            uri = vscode.window.activeTextEditor.document.uri;
+        }
+
+        if (!uri) {
+            const currentJournalPath = await ensureValidPath();
+            if (!currentJournalPath) { return undefined; }
+
+            const files = await getAllMarkdownFiles(currentJournalPath);
+            if (files.length === 0) {
+                vscode.window.showInformationMessage('No journal entries found.');
+                return undefined;
+            }
+
+            const items = files.map(file => ({
+                label: path.basename(file, '.md'),
+                description: path.relative(currentJournalPath, file),
+                file: file
+            }));
+
+            const selected = await vscode.window.showQuickPick(items, { placeHolder: 'Select a journal entry to target...' });
+            if (selected) {
+                uri = vscode.Uri.file(selected.file);
+            }
+        }
+
+        return uri;
+    };
+
+    disposables.push(vscode.commands.registerCommand('md-journal.setPath', setJournalPathCommand));
+
+    disposables.push(vscode.commands.registerCommand('md-journal.newDailyEntry', async () => {
+        const journalPath = await ensureValidPath();
+        if (!journalPath) { return; }
 
         const templateFolder = path.join(journalPath, '.templates');
         if (!fs.existsSync(templateFolder)) {
             await fs.promises.mkdir(templateFolder, { recursive: true });
         }
 
-        const templatesList = await fs.promises.readdir(templateFolder);
-        const templates = templatesList.filter(file => file.endsWith('.md'));
+        const templates = (await fs.promises.readdir(templateFolder)).filter(f => f.endsWith('.md'));
         let selectedTemplateContent = '';
 
         if (templates.length > 0) {
-            const templateQuickPickItems = templates.map(template => ({ label: path.basename(template, '.md'), description: template }));
-            const selectedTemplate = await vscode.window.showQuickPick(templateQuickPickItems, { placeHolder: 'Select a template or press Esc for a blank note' });
-
-            if (selectedTemplate) {
-                selectedTemplateContent = await fs.promises.readFile(path.join(templateFolder, selectedTemplate.description), 'utf8');
+            const items = templates.map(t => ({ label: path.basename(t, '.md'), description: t }));
+            const selected = await vscode.window.showQuickPick(items, { placeHolder: 'Select a template or press Esc for a blank note' });
+            if (selected) {
+                selectedTemplateContent = await fs.promises.readFile(path.join(templateFolder, selected.description), 'utf8');
             }
         }
 
         const today = new Date();
-        const fullFolderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
-
+        const fullFolderPath = path.join(journalPath, getJournalFolderPath(today, getFolderStructure()));
         if (!fs.existsSync(fullFolderPath)) {
             await fs.promises.mkdir(fullFolderPath, { recursive: true });
         }
 
-        const fileName = 'daily-note.md';
-        const filePath = path.join(fullFolderPath, fileName);
-
-        let fileContent = '';
-        if (selectedTemplateContent) {
-            const fileHeaderFormat = getFileHeaderFormat();
-            fileContent = selectedTemplateContent.replace(/\{date\}/g, getFormattedTimestamp(today, fileHeaderFormat));
-        } else {
-            const fileHeaderFormat = getFileHeaderFormat();
-            fileContent = `# ${getFormattedTimestamp(today, fileHeaderFormat)}\n\n`;
-        }
+        const filePath = path.join(fullFolderPath, 'daily-note.md');
+        const fileHeaderFormat = getFileHeaderFormat();
+        const fileContent = selectedTemplateContent
+            ? selectedTemplateContent.replace(/\{date\}/g, getFormattedTimestamp(today, fileHeaderFormat))
+            : `# ${getFormattedTimestamp(today, fileHeaderFormat)}\n\n`;
 
         await fs.promises.writeFile(filePath, fileContent);
         journalTreeViewProvider.refresh();
 
         const document = await vscode.workspace.openTextDocument(filePath);
         vscode.window.showTextDocument(document);
-        await updateStatusBar(statusBarItem, folderStructure, journalPath);
+        await updateStatusBar(statusBarItem);
         indexService.updateIndexForFile(filePath);
         backlinksTreeViewProvider.refresh(filePath);
     }));
 
-    disposables.push(vscode.commands.registerCommand('md-journal.saveAsTemplate', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showInformationMessage('No active editor found.');
-            return;
-        }
+    disposables.push(vscode.commands.registerCommand('md-journal.saveAsTemplate', async (arg?: any) => {
+        const uri = await resolveContextUri(arg);
+        if (!uri) { return; }
 
-        const journalPath = getJournalPathSetting();
-        if (!journalPath) {
-            vscode.window.showInformationMessage('Journal path not configured. Please configure it in settings.');
-            return;
-        }
+        const journalPath = await ensureValidPath();
+        if (!journalPath) { return; }
 
         const templateFolder = path.join(journalPath, '.templates');
         if (!fs.existsSync(templateFolder)) {
             await fs.promises.mkdir(templateFolder, { recursive: true });
         }
 
+        const targetFilename = path.basename(uri.fsPath);
         const templateName = await vscode.window.showInputBox({
-            prompt: 'Enter template name (e.g., meeting-notes)',
-            value: path.basename(editor.document.fileName, '.md')
+            prompt: `Save '${targetFilename}' as template name (e.g., meeting-notes)`,
+            value: path.basename(uri.fsPath, '.md')
         });
+        if (!templateName) { return; }
 
-        if (!templateName) {
-            return;
-        }
+        const contentArray = await vscode.workspace.fs.readFile(uri);
+        let contentToSave = new TextDecoder().decode(contentArray);
 
-        let contentToSave = editor.document.getText();
-        const firstLine = editor.document.lineAt(0).text;
+        const firstLineMatch = contentToSave.match(/^([^\n]*)\n/);
+        const firstLine = firstLineMatch ? firstLineMatch[1] : contentToSave;
         const fileHeaderFormat = getFileHeaderFormat();
-        const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\\\]{}]/g, '\\$&'))}`);
-
+        const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))}`);
         if (regex.test(firstLine)) {
-            contentToSave = editor.document.getText().substring(editor.document.lineAt(0).rangeIncludingLineBreak.end.character);
+            contentToSave = contentToSave.substring(firstLine.length + 1);
         }
 
-        const templateFilePath = path.join(templateFolder, `${templateName}.md`);
-        await fs.promises.writeFile(templateFilePath, contentToSave);
-        vscode.window.showInformationMessage(`Template '${templateName}' saved successfully!`);
+        await fs.promises.writeFile(path.join(templateFolder, `${templateName}.md`), contentToSave);
+        vscode.window.showInformationMessage(`Template '${templateName}' saved successfully from '${targetFilename}'!`);
     }));
 
     disposables.push(vscode.commands.registerCommand('md-journal.goToTodaysNote', async () => {
-        const journalPath = getJournalPathSetting();
+        const journalPath = await ensureValidPath();
+        if (!journalPath) { return; }
 
-        const today = new Date();
-        const folderPath = path.join(journalPath, getJournalFolderPath(today, folderStructure));
+        const folderPath = path.join(journalPath, getJournalFolderPath(new Date(), getFolderStructure()));
 
         if (!fs.existsSync(folderPath)) {
             const selection = await vscode.window.showInformationMessage('No note found for today.', 'Create One');
-            if (selection === 'Create One') {
-                vscode.commands.executeCommand('md-journal.newDailyEntry');
-            }
+            if (selection === 'Create One') { vscode.commands.executeCommand('md-journal.newDailyEntry'); }
             return;
         }
 
-        const dirContents = await fs.promises.readdir(folderPath);
-        const files = dirContents.filter(file => file.endsWith('.md'));
+        const files = (await fs.promises.readdir(folderPath)).filter(f => f.endsWith('.md'));
 
         if (files.length === 0) {
             const selection = await vscode.window.showInformationMessage('No note found for today.', 'Create One');
-            if (selection === 'Create One') {
-                vscode.commands.executeCommand('md-journal.newDailyEntry');
-            }
-            return;
+            if (selection === 'Create One') { vscode.commands.executeCommand('md-journal.newDailyEntry'); }
         } else if (files.length === 1) {
-            const filePath = path.join(folderPath, files[0]);
-            const document = await vscode.workspace.openTextDocument(filePath);
+            const document = await vscode.workspace.openTextDocument(path.join(folderPath, files[0]));
             vscode.window.showTextDocument(document);
         } else {
             const result = await vscode.window.showQuickPick(files, { placeHolder: 'Select a note to open' });
             if (result) {
-                const filePath = path.join(folderPath, result);
-                const document = await vscode.workspace.openTextDocument(filePath);
+                const document = await vscode.workspace.openTextDocument(path.join(folderPath, result));
                 vscode.window.showTextDocument(document);
             }
         }
     }));
 
     disposables.push(vscode.commands.registerCommand('md-journal.refreshEntries', async () => {
+        if (!await ensureValidPath()) { return; }
         await indexService.initializeIndex();
-        await updateStatusBar(statusBarItem, folderStructure, journalPath);
+        await updateStatusBar(statusBarItem);
     }));
 
     disposables.push(vscode.commands.registerCommand('md-journal.searchEntries', async () => {
-        const currentJournalPath = getJournalPathSetting();
+        const currentJournalPath = await ensureValidPath();
         if (!currentJournalPath) { return; }
+
         const files = await getAllMarkdownFiles(currentJournalPath);
         if (files.length === 0) {
             vscode.window.showInformationMessage('No journal entries found.');
             return;
         }
 
-        const items = files.map(file => {
-            const relativePath = path.relative(currentJournalPath, file);
-            return {
-                label: path.basename(file, '.md'),
-                description: relativePath,
-                file: file
-            };
-        });
+        const items = files.map(file => ({
+            label: path.basename(file, '.md'),
+            description: path.relative(currentJournalPath, file),
+            file: file
+        }));
 
         const selected = await vscode.window.showQuickPick(items, { placeHolder: 'Search journal entries...' });
         if (selected) {
@@ -183,37 +249,57 @@ export function registerCommands(
         }
     }));
 
-    disposables.push(vscode.commands.registerCommand('md-journal.renameEntry', async (node?: vscode.TreeItem) => {
-        if (!node || !node.resourceUri) { return; }
+    disposables.push(vscode.commands.registerCommand('md-journal.renameEntry', async (arg?: any) => {
+        const uri = await resolveContextUri(arg);
+        if (!uri) { return; }
 
-        const uri = node.resourceUri;
         const oldName = path.basename(uri.fsPath, '.md');
+        const targetFilename = path.basename(uri.fsPath);
+
         const newName = await vscode.window.showInputBox({
-            prompt: 'Enter new name for the entry',
+            prompt: `Enter new name for '${targetFilename}'`,
             value: oldName
         });
-
         if (!newName || newName === oldName) { return; }
 
-        const newFileName = newName.endsWith('.md') ? newName : `${newName}.md`;
+        const newFileName = sanitizeFileName(newName) + '.md';
         const newUri = vscode.Uri.file(path.join(path.dirname(uri.fsPath), newFileName));
 
+        // Skip if sanitized name resolves to the same file (e.g. only case difference on Windows)
+        if (newUri.fsPath.toLowerCase() === uri.fsPath.toLowerCase()) { return; }
+
+        let overwrite = false;
         try {
-            await vscode.workspace.fs.rename(uri, newUri);
+            await vscode.workspace.fs.stat(newUri);
+            const choice = await vscode.window.showWarningMessage(
+                `A file named '${newFileName}' already exists in this folder.`,
+                { modal: true },
+                'Overwrite',
+                'Cancel'
+            );
+            if (choice !== 'Overwrite') { return; }
+            overwrite = true;
+        } catch {
+            // File does not exist, safe to rename
+        }
+
+        try {
+            await vscode.workspace.fs.rename(uri, newUri, { overwrite });
             journalTreeViewProvider.refresh();
             await indexService.updateIndexForFile(uri.fsPath, false);
             await indexService.updateIndexForFile(newUri.fsPath, true);
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to rename file: ${error}`);
+            vscode.window.showErrorMessage(`Failed to rename file '${targetFilename}': ${error}`);
         }
     }));
 
-    disposables.push(vscode.commands.registerCommand('md-journal.deleteEntry', async (node?: vscode.TreeItem) => {
-        if (!node || !node.resourceUri) { return; }
+    disposables.push(vscode.commands.registerCommand('md-journal.deleteEntry', async (arg?: any) => {
+        const uri = await resolveContextUri(arg);
+        if (!uri) { return; }
 
-        const uri = node.resourceUri;
+        const targetFilename = path.basename(uri.fsPath);
         const confirm = await vscode.window.showWarningMessage(
-            `Are you sure you want to delete ${path.basename(uri.fsPath)}?`,
+            `Are you sure you want to delete ${targetFilename}?`,
             { modal: true },
             'Delete'
         );
@@ -224,7 +310,7 @@ export function registerCommands(
                 journalTreeViewProvider.refresh();
                 await indexService.updateIndexForFile(uri.fsPath, true);
             } catch (error) {
-                vscode.window.showErrorMessage(`Failed to delete file: ${error}`);
+                vscode.window.showErrorMessage(`Failed to delete file '${targetFilename}': ${error}`);
             }
         }
     }));

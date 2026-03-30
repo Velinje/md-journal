@@ -28,6 +28,7 @@ The core goal is to create a small, robust, super performant and fast journaling
 
 ## Future Feature Ideas
 
+*   **Multiple Journals:** Allow users to create and manage multiple journals, each with its own settings and templates. Allow quick switch between journals.
 *   **Advanced Search:** Implement a dedicated command to search across all journal entries, potentially with filtering by date or tags.
 *   **Calendar View:** A webview-based calendar to visualize and navigate to entries from different dates.
 *   **Statistics:** Show word count, entry streak, and other interesting stats. Historical footprints on your writing.

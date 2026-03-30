@@ -2,6 +2,22 @@
 
 All notable changes to the "md-journal" extension will be documented in this file.
 
+## 0.6.0
+
+### Features
+- **Smarter first-run experience**: The welcome panel now shows a context-aware message depending on whether a journal folder has been configured. New users see a setup prompt; returning users with an empty journal see a prompt to create their first entry.
+- **Folder picker for journal path**: "Change Folder Path" now opens a native folder-picker dialog pre-navigated to `~/md-journal` as a suggested location.
+- **Guided setup from any command**: Invoking any journal command (e.g. "New Daily Entry") without a configured folder now surfaces a "Set Journal Folder" prompt inline, rather than failing silently.
+- **Rename collision handling**: Renaming a file (auto or manual) to a name that already exists in the folder no longer crashes. Auto-rename shows a warning and aborts; the manual rename command offers an "Overwrite" option.
+
+### Bug Fixes
+- **Silent failure on unconfigured path**: Commands and the extension itself would silently fail or surface raw VS Code errors when no journal path had been set. All entry points now guide the user to configure a folder instead.
+
+### Improvements
+- The extension no longer writes to `~/md-journal` without the user's knowledge — a journal folder must be explicitly chosen.
+- VSIX package trimmed to only the 6 essential files.
+
+
 ## 0.5.0
 
 ### Performance & Architecture Overhaul

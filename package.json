@@ -2,7 +2,7 @@
   "name": "md-journal",
   "displayName": "md-journal",
   "description": "MD Journal: Keep your journaling simple and versatile. A powerful VS Code extension for seamless Markdown journaling.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "fuzzyoutput",
   "repository": {
     "url": "https://github.com/Velinje/md-journal",
@@ -43,39 +43,53 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
+    "onStartupFinished",
     "onLanguage:markdown"
   ],
   "contributes": {
     "commands": [
       {
         "command": "md-journal.newDailyEntry",
-        "title": "Journal: New Daily Entry"
+        "title": "New Daily Entry",
+        "category": "MD Journal"
       },
       {
         "command": "md-journal.goToTodaysNote",
-        "title": "Journal: Go to Today's Note"
+        "title": "Go to Today's Note",
+        "category": "MD Journal"
       },
       {
         "command": "md-journal.saveAsTemplate",
-        "title": "Journal: Save as Template"
+        "title": "Save as Template",
+        "category": "MD Journal"
       },
       {
         "command": "md-journal.refreshEntries",
         "title": "Refresh",
-        "icon": "$(refresh)"
+        "icon": "$(refresh)",
+        "category": "MD Journal"
       },
       {
         "command": "md-journal.searchEntries",
         "title": "Search Journal Entries",
-        "icon": "$(search)"
+        "icon": "$(search)",
+        "category": "MD Journal"
       },
       {
         "command": "md-journal.renameEntry",
-        "title": "Rename Journal Entry"
+        "title": "Rename Journal Entry",
+        "category": "MD Journal"
       },
       {
         "command": "md-journal.deleteEntry",
-        "title": "Delete Journal Entry"
+        "title": "Delete Journal Entry",
+        "category": "MD Journal"
+      },
+      {
+        "command": "md-journal.setPath",
+        "title": "Set Journal Folder",
+        "icon": "$(folder-opened)",
+        "category": "MD Journal"
       }
     ],
     "menus": {
@@ -87,6 +101,11 @@
         },
         {
           "command": "md-journal.searchEntries",
+          "when": "view == md-journal-entries",
+          "group": "navigation"
+        },
+        {
+          "command": "md-journal.setPath",
           "when": "view == md-journal-entries",
           "group": "navigation"
         }
@@ -129,7 +148,7 @@
       "properties": {
         "md-journal.journalPath": {
           "type": "string",
-          "default": "",
+          "default": "~/md-journal",
           "description": "The root path to your journal."
         },
         "md-journal.folderStructure": {
@@ -171,11 +190,25 @@
           "icon": "$(link)"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "md-journal-entries",
+        "when": "!md-journal.hasJournalPath",
+        "contents": "Welcome to MD Journal!\n\nNo journal folder has been configured yet. Make sure to set a folder for your entries. It is recommended to store your journal in a folder that is not inside your workspace, use a cloud synced folder like OneDrive, Google Drive or Dropbox.\n [Change Journal Folder](command:md-journal.setPath)"
+      },
+      {
+        "view": "md-journal-entries",
+        "when": "md-journal.hasJournalPath",
+        "contents": "Your journal is empty.  Create your first entry to get started.\n\n[Create First Entry](command:md-journal.newDailyEntry)\n\nIt is recommended to store your journal in a folder that is not inside your workspace, avoid using the dault folder. Use a cloud synced folder like OneDrive, Google Drive or Dropbox.\n [Change Journal Folder](command:md-journal.setPath)"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && npm run lint && rolldown -c rolldown.config.mjs",
+    "sandbox": "npm run compile && node scripts/sandbox.js",
+    "sandbox:persist": "npm run compile && node scripts/sandbox.js --persist",
     "watch": "npm-run-all -p watch:*",
     "watch:rolldown": "rolldown -c rolldown.config.mjs --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
