@@ -6,7 +6,14 @@ import * as os from 'os';
  *  Does NOT fall back to a default — callers that need a guaranteed path should
  *  use ensureValidPath() (in commands.ts) which will prompt the user. */
 export function getJournalPath(): string {
-    const configuredPath = vscode.workspace.getConfiguration('md-journal').get<string>('journalPath', '');
+    const config = vscode.workspace.getConfiguration('md-journal');
+    const inspected = config.inspect<string>('journalPath');
+    const configuredPath =
+        inspected?.globalValue ??
+        inspected?.workspaceValue ??
+        inspected?.workspaceFolderValue ??
+        '';
+
     if (!configuredPath.trim()) {
         return '';
     }

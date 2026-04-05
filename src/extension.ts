@@ -23,7 +23,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 
 		let journalPath = getJournalPath();
-		const folderStructure = getFolderStructure();
 
 		const log = vscode.window.createOutputChannel('MD Journal');
 		context.subscriptions.push(log);
@@ -55,7 +54,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			indexService,
 			backlinksTreeViewProvider,
 			statusBarItem,
-			folderStructure,
 		);
 		commandDisposables.forEach(d => context.subscriptions.push(d));
 
@@ -112,8 +110,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		}));
 
+		await updateStatusBar(statusBarItem);
 		if (journalPath) {
-			await updateStatusBar(statusBarItem);
 			indexService.initializeIndex().catch(e => {
 				log.appendLine(`Error initializing index: ${e.message ?? e}`);
 			});

@@ -148,7 +148,7 @@
       "properties": {
         "md-journal.journalPath": {
           "type": "string",
-          "default": "~/md-journal",
+          "default": "",
           "description": "The root path to your journal."
         },
         "md-journal.folderStructure": {
@@ -200,7 +200,7 @@
       {
         "view": "md-journal-entries",
         "when": "md-journal.hasJournalPath",
-        "contents": "Your journal is empty.  Create your first entry to get started.\n\n[Create First Entry](command:md-journal.newDailyEntry)\n\nIt is recommended to store your journal in a folder that is not inside your workspace, avoid using the dault folder. Use a cloud synced folder like OneDrive, Google Drive or Dropbox.\n [Change Journal Folder](command:md-journal.setPath)"
+        "contents": "Your journal is empty.  Create your first entry to get started.\n\n[Create First Entry](command:md-journal.newDailyEntry)\n\nIt is recommended to store your journal in a folder that is not inside your workspace, avoid using the default folder. Use a cloud synced folder like OneDrive, Google Drive or Dropbox.\n [Change Journal Folder](command:md-journal.setPath)"
       }
     ]
   },

@@ -4,7 +4,6 @@ out/**
 node_modules/**
 src/**
 scripts/**
-resources/**
 .gitignore
 **/tsconfig.json
 **/eslint.config.mjs

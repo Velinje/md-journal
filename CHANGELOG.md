@@ -12,6 +12,10 @@ All notable changes to the "md-journal" extension will be documented in this fil
 
 ### Bug Fixes
 - **Silent failure on unconfigured path**: Commands and the extension itself would silently fail or surface raw VS Code errors when no journal path had been set. All entry points now guide the user to configure a folder instead.
+- **Empty Configured Paths**: Reverted contributed default `journalPath` to be empty string rather than incorrectly defaulting to the user's home directory.
+- **Containment Check**: Fixed a trailing slash calculation issue that could falsely mark documents as being outside the configured journal folder.
+- **Status Bar on Setup**: Ensures the setup status bar icon immediately renders on start when no journal is configured.
+- **Rename Validation**: Explicit validation errors when renaming to names containing only invalid characters.
 
 ### Improvements
 - The extension no longer writes to `~/md-journal` without the user's knowledge — a journal folder must be explicitly chosen.

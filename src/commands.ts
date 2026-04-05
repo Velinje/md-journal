@@ -18,7 +18,6 @@ export function registerCommands(
     indexService: IndexService,
     backlinksTreeViewProvider: BacklinksTreeViewProvider,
     statusBarItem: vscode.StatusBarItem,
-    folderStructure: string,
 ) {
     const disposables: vscode.Disposable[] = [];
 
@@ -262,7 +261,13 @@ export function registerCommands(
         });
         if (!newName || newName === oldName) { return; }
 
-        const newFileName = sanitizeFileName(newName) + '.md';
+        const sanitizedName = sanitizeFileName(newName);
+        if (!sanitizedName) {
+            vscode.window.showErrorMessage(`MD Journal: Invalid file name.`);
+            return;
+        }
+
+        const newFileName = sanitizedName + '.md';
         const newUri = vscode.Uri.file(path.join(path.dirname(uri.fsPath), newFileName));
 
         // Skip if sanitized name resolves to the same file (e.g. only case difference on Windows)

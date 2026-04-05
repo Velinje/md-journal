@@ -18,8 +18,11 @@ export function registerListeners(
             const journalPath = getJournalPath();
             if (!journalPath) { return; }
 
-            const normalizedDoc = path.normalize(document.uri.fsPath).toLowerCase();
-            const normalizedJournal = path.normalize(journalPath).toLowerCase();
+            const normalizedDoc = path.resolve(document.uri.fsPath).toLowerCase();
+            let normalizedJournal = path.resolve(journalPath).toLowerCase();
+            if (normalizedJournal.endsWith(path.sep)) {
+                normalizedJournal = normalizedJournal.slice(0, -1);
+            }
             const isInsideJournal = normalizedDoc.startsWith(normalizedJournal + path.sep);
 
             if (isInsideJournal) {
