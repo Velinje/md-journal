@@ -66,7 +66,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					const oldPath = journalPath;
 					journalPath = newJournalPath;
 
-					if (oldPath) {
+					if (oldPath && newJournalPath) {
 						let files: string[] = [];
 						try { files = await getAllMarkdownFiles(oldPath); } catch (e) { }
 
@@ -88,6 +88,8 @@ export async function activate(context: vscode.ExtensionContext) {
 										for (const file of files) {
 											const relativePath = path.relative(oldPath, file);
 											const targetUri = vscode.Uri.file(path.join(newJournalPath, relativePath));
+											const targetDirUri = vscode.Uri.file(path.dirname(targetUri.fsPath));
+											await vscode.workspace.fs.createDirectory(targetDirUri);
 											await vscode.workspace.fs.copy(vscode.Uri.file(file), targetUri, { overwrite: true });
 											copiedCount++;
 											progress.report({ message: `Copied ${copiedCount} of ${files.length}` });
@@ -103,7 +105,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				}
 
 				journalTreeViewProvider.updateJournalPath(newJournalPath);
-				indexService.setJournalPath(newJournalPath);
+				await indexService.setJournalPath(newJournalPath);
 				await updateStatusBar(statusBarItem);
 				journalTreeViewProvider.refresh();
 				tagTreeViewProvider.refresh();

@@ -18,12 +18,18 @@ export function registerListeners(
             const journalPath = getJournalPath();
             if (!journalPath) { return; }
 
-            const normalizedDoc = path.resolve(document.uri.fsPath).toLowerCase();
-            let normalizedJournal = path.resolve(journalPath).toLowerCase();
-            if (normalizedJournal.endsWith(path.sep)) {
-                normalizedJournal = normalizedJournal.slice(0, -1);
+            let docPath = path.resolve(document.uri.fsPath);
+            let journalRoot = path.resolve(journalPath);
+            if (journalRoot.endsWith(path.sep)) {
+                journalRoot = journalRoot.slice(0, -1);
             }
-            const isInsideJournal = normalizedDoc.startsWith(normalizedJournal + path.sep);
+
+            if (process.platform === 'win32' || process.platform === 'darwin') {
+                docPath = docPath.toLowerCase();
+                journalRoot = journalRoot.toLowerCase();
+            }
+
+            const isInsideJournal = docPath.startsWith(journalRoot + path.sep);
 
             if (isInsideJournal) {
                 const basename = path.basename(document.fileName);

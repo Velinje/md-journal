@@ -9,9 +9,9 @@ export function getJournalPath(): string {
     const config = vscode.workspace.getConfiguration('md-journal');
     const inspected = config.inspect<string>('journalPath');
     const configuredPath =
-        inspected?.globalValue ??
-        inspected?.workspaceValue ??
         inspected?.workspaceFolderValue ??
+        inspected?.workspaceValue ??
+        inspected?.globalValue ??
         '';
 
     if (!configuredPath.trim()) {

@@ -16,6 +16,10 @@ All notable changes to the "md-journal" extension will be documented in this fil
 - **Containment Check**: Fixed a trailing slash calculation issue that could falsely mark documents as being outside the configured journal folder.
 - **Status Bar on Setup**: Ensures the setup status bar icon immediately renders on start when no journal is configured.
 - **Rename Validation**: Explicit validation errors when renaming to names containing only invalid characters.
+- **Config Precedence**: Journal path resolution now correctly prioritizes workspace settings over global settings instead of vice versa.
+- **Case Sensitivity Safety**: Containment checks now strictly use real casing on Linux to avoid modifying files incorrectly while allowing case-folding on Windows and macOS.
+- **Migration Safety**: Added guards to prevent the migration tool from failing if a journal setting is cleared manually, and fixed directory creation for nested migrating entries.
+- **UI State Races**: Awaits the index provider update so the activity bar UI states won't race the initialization logic.
 
 ### Improvements
 - The extension no longer writes to `~/md-journal` without the user's knowledge — a journal folder must be explicitly chosen.
