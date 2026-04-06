@@ -5,6 +5,17 @@ import * as path from 'path';
 import * as os from 'os';
 
 suite('Extension Test Suite', () => {
+    let originalJournalPath: string | undefined;
+
+    suiteSetup(() => {
+        const config = vscode.workspace.getConfiguration('md-journal').inspect<string>('journalPath');
+        originalJournalPath = config?.globalValue;
+    });
+
+    suiteTeardown(async () => {
+        await vscode.workspace.getConfiguration('md-journal').update('journalPath', originalJournalPath, vscode.ConfigurationTarget.Global);
+    });
+
     vscode.window.showInformationMessage('Start all tests.');
 
     test('Sample test', () => {
@@ -46,8 +57,91 @@ suite('Extension Test Suite', () => {
         assert.strictEqual(backlinksToLink1.length, 1, 'link1 should have one backlink');
         assert.strictEqual(backlinksToLink1[0], file1Path, 'link1 backlink path should be correct');
 
-        fs.unlinkSync(file1Path);
-        fs.unlinkSync(file2Path);
-        fs.rmdirSync(testJournalPath);
+        fs.rmSync(testJournalPath, { recursive: true, force: true });
+    }).timeout(10000);
+
+    test('Should prompt and set folder when journal path is empty', async () => {
+        await vscode.workspace.getConfiguration('md-journal').update('journalPath', '', vscode.ConfigurationTarget.Global);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        let warningMessageShown = false;
+        let openDialogShown = false;
+        
+        const originalShowWarningMessage = vscode.window.showWarningMessage;
+        const originalShowOpenDialog = vscode.window.showOpenDialog;
+        const dummyPath = path.join(os.tmpdir(), 'dummy-journal-test-');
+        
+        try {
+            vscode.window.showWarningMessage = (async (msg: string, ...items: string[]) => {
+                warningMessageShown = true;
+                return 'Set Journal Folder';
+            }) as any;
+
+            vscode.window.showOpenDialog = (async () => {
+                openDialogShown = true;
+                return [vscode.Uri.file(dummyPath)];
+            }) as any;
+            
+            await vscode.commands.executeCommand('md-journal.newDailyEntry');
+            
+            assert.strictEqual(warningMessageShown, true, 'Warning message should be shown');
+            assert.strictEqual(openDialogShown, true, 'Open dialog should be shown');
+            
+            const newConfig = vscode.workspace.getConfiguration('md-journal').inspect<string>('journalPath');
+            assert.strictEqual(newConfig?.globalValue?.toLowerCase(), dummyPath.toLowerCase(), 'Configuration should be updated to dummy path');
+        } finally {
+            vscode.window.showWarningMessage = originalShowWarningMessage;
+            vscode.window.showOpenDialog = originalShowOpenDialog;
+            try { fs.rmSync(dummyPath, { recursive: true, force: true }); } catch (e) { }
+        }
+    }).timeout(10000);
+
+    test('Should handle rename collisions without overwriting by default', async () => {
+        const testJournalPath = fs.mkdtempSync(path.join(os.tmpdir(), 'md-journal-test-2-'));
+        await vscode.workspace.getConfiguration('md-journal').update('journalPath', testJournalPath, vscode.ConfigurationTarget.Global);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const fileA = path.join(testJournalPath, 'fileA.md');
+        const fileB = path.join(testJournalPath, 'fileB.md');
+        fs.writeFileSync(fileA, 'A');
+        fs.writeFileSync(fileB, 'B');
+
+        const document = await vscode.workspace.openTextDocument(fileA);
+        await vscode.window.showTextDocument(document);
+
+        let inputShown = false;
+        let warningShown = false;
+
+        const originalShowInputBox = vscode.window.showInputBox;
+        const originalShowWarningMessage = vscode.window.showWarningMessage;
+
+        try {
+            vscode.window.showInputBox = (async () => {
+                inputShown = true;
+                return 'fileB';
+            }) as any;
+
+            vscode.window.showWarningMessage = (async (msg: string, options: any, ...items: string[]) => {
+                warningShown = true;
+                return 'Cancel';
+            }) as any;
+
+            await vscode.commands.executeCommand('md-journal.renameEntry');
+
+            assert.strictEqual(inputShown, true, 'Input box should be shown for rename');
+            assert.strictEqual(warningShown, true, 'Warning should be shown for collision');
+            
+            assert.strictEqual(fs.existsSync(fileA), true, 'fileA should still exist');
+            assert.strictEqual(fs.existsSync(fileB), true, 'fileB should still exist');
+
+        } finally {
+            vscode.window.showInputBox = originalShowInputBox;
+            vscode.window.showWarningMessage = originalShowWarningMessage;
+            
+            await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            try { fs.rmSync(testJournalPath, { recursive: true, force: true }); } catch (e) { console.error(e); }
+        }
     }).timeout(10000);
 });

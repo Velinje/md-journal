@@ -68,7 +68,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 					if (oldPath && newJournalPath) {
 						let files: string[] = [];
-						try { files = await getAllMarkdownFiles(oldPath); } catch (e) { }
+						try { files = await getAllMarkdownFiles(oldPath); } catch (e: any) { log.appendLine(`Failed to scan old journal for migration: ${e.message ?? e}`); }
 
 						if (files.length > 0) {
 							const selection = await vscode.window.showInformationMessage(

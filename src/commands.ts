@@ -178,12 +178,13 @@ export function registerCommands(
         const contentArray = await vscode.workspace.fs.readFile(uri);
         let contentToSave = new TextDecoder().decode(contentArray);
 
-        const firstLineMatch = contentToSave.match(/^([^\n]*)\n/);
+        const firstLineMatch = contentToSave.match(/^([^\r\n]*)(\r?\n)?/);
         const firstLine = firstLineMatch ? firstLineMatch[1] : contentToSave;
+        const newlineLen = firstLineMatch && firstLineMatch[2] ? firstLineMatch[2].length : 0;
         const fileHeaderFormat = getFileHeaderFormat();
         const regex = new RegExp(`^# ${getFormattedTimestamp(new Date(), fileHeaderFormat.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'))}`);
         if (regex.test(firstLine)) {
-            contentToSave = contentToSave.substring(firstLine.length + 1);
+            contentToSave = contentToSave.substring(firstLine.length + newlineLen);
         }
 
         await fs.promises.writeFile(path.join(templateFolder, `${templateName}.md`), contentToSave);
