@@ -4,26 +4,12 @@ All notable changes to the "md-journal" extension will be documented in this fil
 
 ## 0.6.0
 
-### Features
-- **Smarter first-run experience**: The welcome panel now shows a context-aware message depending on whether a journal folder has been configured. New users see a setup prompt; returning users with an empty journal see a prompt to create their first entry.
-- **Folder picker for journal path**: "Change Folder Path" now opens a native folder-picker dialog pre-navigated to `~/md-journal` as a suggested location.
-- **Guided setup from any command**: Invoking any journal command (e.g. "New Daily Entry") without a configured folder now surfaces a "Set Journal Folder" prompt inline, rather than failing silently.
-- **Rename collision handling**: Renaming a file (auto or manual) to a name that already exists in the folder no longer crashes. Auto-rename shows a warning and aborts; the manual rename command offers an "Overwrite" option.
-
-### Bug Fixes
-- **Silent failure on unconfigured path**: Commands and the extension itself would silently fail or surface raw VS Code errors when no journal path had been set. All entry points now guide the user to configure a folder instead.
-- **Empty Configured Paths**: Reverted contributed default `journalPath` to be empty string rather than incorrectly defaulting to the user's home directory.
-- **Containment Check**: Fixed a trailing slash calculation issue that could falsely mark documents as being outside the configured journal folder.
-- **Status Bar on Setup**: Ensures the setup status bar icon immediately renders on start when no journal is configured.
-- **Rename Validation**: Explicit validation errors when renaming to names containing only invalid characters.
-- **Config Precedence**: Journal path resolution now correctly prioritizes workspace settings over global settings instead of vice versa.
-- **Case Sensitivity Safety**: Containment checks now strictly use real casing on Linux to avoid modifying files incorrectly while allowing case-folding on Windows and macOS.
-- **Migration Safety**: Added guards to prevent the migration tool from failing if a journal setting is cleared manually, and fixed directory creation for nested migrating entries.
-- **UI State Races**: Awaits the index provider update so the activity bar UI states won't race the initialization logic.
-
-### Improvements
-- The extension no longer writes to `~/md-journal` without the user's knowledge — a journal folder must be explicitly chosen.
-- VSIX package trimmed to only the 6 essential files.
+### Features & Improvements
+- **Guided First-Run Setup**: Context-aware welcome panels and unified command fallbacks securely guide you into configuring your root journal via native folder-picker directories without invoking silent failures internally.
+- **Rename Protections & OS Isolation**: Safely intercepts collision strings ensuring manual/auto renames elegantly bounce rather than fatally crashing. Properly maps Linux/Mac/Windows case-sensitive filesystems independently intercepting trailing explicit `.md` strings securely. 
+- **Scoped CPU Background Efficiencies**: Reduced global `**/*.md` memory hooks down dynamically scoping your mapped root path securely terminating un-configured idle extension CPU loads perfectly.
+- **Safe Directory Migrations**: Implicated a fault-tolerant path migration map bouncing un-overwritten collision files cleanly tracking safe skip migrations accurately internally!
+- **Index State Resiliency**: Mitigates overlapping race conditions queuing IDE watch events aggressively securing memory index cache trees flawlessly.
 
 
 ## 0.5.0

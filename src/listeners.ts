@@ -70,7 +70,7 @@ export function registerListeners(
 
     disposables.push(vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem)));
 
-    const watcher = vscode.workspace.createFileSystemWatcher('**/*.md');
+    let watcher: vscode.FileSystemWatcher | undefined;
 
     const pendingChanges = new Set<string>();
     let debounceTimer: NodeJS.Timeout | null = null;
@@ -94,10 +94,36 @@ export function registerListeners(
         debounceTimer = setTimeout(processPendingChanges, 300);
     };
 
-    watcher.onDidChange(onFileChange);
-    watcher.onDidCreate(onFileChange);
-    watcher.onDidDelete(onFileChange);
-    disposables.push(watcher);
+    const updateWatcher = () => {
+        if (watcher) {
+            watcher.dispose();
+            watcher = undefined;
+        }
+        const currentJournalPath = getJournalPath();
+        if (currentJournalPath) {
+            const pattern = new vscode.RelativePattern(vscode.Uri.file(currentJournalPath), '**/*.md');
+            watcher = vscode.workspace.createFileSystemWatcher(pattern);
+            watcher.onDidChange(onFileChange);
+            watcher.onDidCreate(onFileChange);
+            watcher.onDidDelete(onFileChange);
+        }
+    };
+
+    updateWatcher();
+
+    disposables.push(vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('md-journal.journalPath')) {
+            updateWatcher();
+        }
+    }));
+
+    disposables.push({
+        dispose: () => {
+            if (watcher) {
+                watcher.dispose();
+            }
+        }
+    });
 
     return disposables;
 }

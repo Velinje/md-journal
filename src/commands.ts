@@ -280,7 +280,9 @@ export function registerCommands(
         });
         if (!newName || newName === oldName) { return; }
 
-        const sanitizedName = sanitizeFileName(newName);
+        const strippedName = newName.toLowerCase().endsWith('.md') ? newName.slice(0, -3) : newName;
+
+        const sanitizedName = sanitizeFileName(strippedName);
         if (!sanitizedName) {
             vscode.window.showErrorMessage(`MD Journal: Invalid file name.`);
             return;

@@ -18,7 +18,7 @@ export function getJournalPath(): string {
         return '';
     }
     // Expand leading ~ to home dir
-    const expanded = (configuredPath.startsWith('~/') || configuredPath === '~')
+    const expanded = (configuredPath.startsWith('~/') || configuredPath.startsWith('~\\') || configuredPath === '~')
         ? configuredPath.replace(/^~(?=$|\/|\\)/, os.homedir())
         : configuredPath;
     return path.normalize(expanded);
