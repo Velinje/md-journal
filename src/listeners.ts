@@ -6,7 +6,6 @@ import { getJournalFolderPath } from './date';
 import { getJournalPath, getFolderStructure } from './settings';
 
 export function registerListeners(
-    context: vscode.ExtensionContext,
     indexService: IndexService,
     statusBarItem: vscode.StatusBarItem,
     log: vscode.OutputChannel
@@ -33,8 +32,12 @@ export function registerListeners(
 
                         const newFilePath = path.join(path.dirname(document.fileName), newFileName);
 
-                        // Skip if already correctly named (handles case-only differences on Windows)
-                        if (newFilePath.toLowerCase() === document.fileName.toLowerCase()) { return; }
+                        // Skip if already correctly named. Use case-insensitive comparison on Windows,
+                        // but preserve case-sensitive behavior on other platforms so case-only renames work.
+                        const isSamePath = require('os').platform() === 'win32'
+                            ? newFilePath.toLowerCase() === document.fileName.toLowerCase()
+                            : newFilePath === document.fileName;
+                        if (isSamePath) { return; }
 
                         // Check for collision — don't silently overwrite an existing file
                         try {

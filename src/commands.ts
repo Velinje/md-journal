@@ -289,8 +289,12 @@ export function registerCommands(
         const newFileName = sanitizedName + '.md';
         const newUri = vscode.Uri.file(path.join(path.dirname(uri.fsPath), newFileName));
 
-        // Skip if sanitized name resolves to the same file (e.g. only case difference on Windows)
-        if (newUri.fsPath.toLowerCase() === uri.fsPath.toLowerCase()) { return; }
+        // Skip only true no-op renames. Use case-insensitive comparison on Windows,
+        // but preserve case-sensitive behavior on other platforms so case-only renames work.
+        const isSamePath = os.platform() === 'win32'
+            ? newUri.fsPath.toLowerCase() === uri.fsPath.toLowerCase()
+            : newUri.fsPath === uri.fsPath;
+        if (isSamePath) { return; }
 
         let overwrite = false;
         try {

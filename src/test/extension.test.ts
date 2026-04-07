@@ -144,4 +144,61 @@ suite('Extension Test Suite', () => {
             try { fs.rmSync(testJournalPath, { recursive: true, force: true }); } catch (e) { console.error(e); }
         }
     }).timeout(10000);
+
+    test('Should simulate migration flow on path change and correctly skip existing files', async () => {
+        const oldJournalPath = fs.mkdtempSync(path.join(os.tmpdir(), 'md-journal-test-old-'));
+        const newJournalPath = fs.mkdtempSync(path.join(os.tmpdir(), 'md-journal-test-new-'));
+        
+        await vscode.workspace.getConfiguration('md-journal').update('journalPath', oldJournalPath, vscode.ConfigurationTarget.Global);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const file1Path = path.join(oldJournalPath, 'entry1.md');
+        const file2Path = path.join(oldJournalPath, 'entry2.md');
+        fs.writeFileSync(file1Path, '# Entry 1');
+        fs.writeFileSync(file2Path, '# Entry 2');
+
+        const collidingFilePath = path.join(newJournalPath, 'entry2.md');
+        if (!fs.existsSync(newJournalPath)) { fs.mkdirSync(newJournalPath, { recursive: true }); }
+        fs.writeFileSync(collidingFilePath, '# Entry 2 Existing');
+
+        let infoMessageShown = false;
+        let progressMessageShown = false;
+
+        const originalShowInformationMessage = vscode.window.showInformationMessage;
+        const originalWithProgress = vscode.window.withProgress;
+
+        try {
+            vscode.window.showInformationMessage = (async (msg: string, ...items: string[]) => {
+                infoMessageShown = true;
+                if (msg.includes('Do you want to copy')) {
+                    return 'Yes, Copy Files';
+                }
+                return items[0];
+            }) as any;
+
+            vscode.window.withProgress = (async (options: any, task: (progress: any) => Promise<any>) => {
+                progressMessageShown = true;
+                return await task({ report: () => { } });
+            }) as any;
+
+            // Trigger migration by changing config
+            await vscode.workspace.getConfiguration('md-journal').update('journalPath', newJournalPath, vscode.ConfigurationTarget.Global);
+            await new Promise(resolve => setTimeout(resolve, 1500)); // wait for migration copies to finish
+
+            assert.strictEqual(infoMessageShown, true, 'Should show migration prompt');
+            assert.strictEqual(progressMessageShown, true, 'Should trigger withProgress');
+
+            assert.strictEqual(fs.existsSync(path.join(newJournalPath, 'entry1.md')), true, 'entry1.md should be copied');
+            
+            const collisionContent = fs.readFileSync(path.join(newJournalPath, 'entry2.md'), 'utf-8');
+            assert.strictEqual(collisionContent, '# Entry 2 Existing', 'entry2.md should be skipped and retain its old content');
+
+        } finally {
+            vscode.window.showInformationMessage = originalShowInformationMessage;
+            vscode.window.withProgress = originalWithProgress;
+
+            try { fs.rmSync(oldJournalPath, { recursive: true, force: true }); } catch (e) { }
+            try { fs.rmSync(newJournalPath, { recursive: true, force: true }); } catch (e) { }
+        }
+    }).timeout(15000);
 });

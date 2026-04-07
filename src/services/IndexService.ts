@@ -47,7 +47,18 @@ export class IndexService {
 
     public async setJournalPath(newPath: string) {
         this.journalPath = newPath;
-        await this.initializeIndex();
+        if (!newPath) {
+            this.tagIndex = {};
+            this.linkIndex = {};
+            this.fileToTags = {};
+            this.cachedMdFiles = null;
+            if (this.context) {
+                await this.saveCache();
+            }
+            this._onIndexUpdated.fire();
+        } else {
+            await this.initializeIndex();
+        }
     }
 
     public async initializeIndex() {

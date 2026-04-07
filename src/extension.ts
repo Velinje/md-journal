@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { JournalTreeViewProvider } from './JournalTreeView';
-import { getFolderStructure, getJournalPath, isJournalPathConfigured } from './settings';
+import { getJournalPath, isJournalPathConfigured } from './settings';
 import { registerCommands } from './commands';
 import { IndexService } from './services/IndexService';
 import { BacklinksTreeViewProvider } from './BacklinksTreeView';
@@ -45,7 +45,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		const tagTreeViewProvider = new TagTreeViewProvider(indexService);
 		context.subscriptions.push(vscode.window.registerTreeDataProvider('md-journal-tags', tagTreeViewProvider));
 
-		const disposables = registerListeners(context, indexService, statusBarItem, log);
+		const disposables = registerListeners(indexService, statusBarItem, log);
 		disposables.forEach(d => context.subscriptions.push(d));
 
 		const commandDisposables = registerCommands(
