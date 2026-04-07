@@ -69,7 +69,7 @@ suite('Extension Test Suite', () => {
         
         const originalShowWarningMessage = vscode.window.showWarningMessage;
         const originalShowOpenDialog = vscode.window.showOpenDialog;
-        const dummyPath = path.join(os.tmpdir(), 'dummy-journal-test-');
+        const dummyPath = fs.mkdtempSync(path.join(os.tmpdir(), 'dummy-journal-test-'));
         
         try {
             vscode.window.showWarningMessage = (async (msg: string, ...items: string[]) => {

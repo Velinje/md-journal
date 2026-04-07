@@ -85,16 +85,34 @@ export async function activate(context: vscode.ExtensionContext) {
 									try {
 										await vscode.workspace.fs.createDirectory(vscode.Uri.file(newJournalPath));
 										let copiedCount = 0;
+										let skippedCount = 0;
 										for (const file of files) {
 											const relativePath = path.relative(oldPath, file);
 											const targetUri = vscode.Uri.file(path.join(newJournalPath, relativePath));
 											const targetDirUri = vscode.Uri.file(path.dirname(targetUri.fsPath));
 											await vscode.workspace.fs.createDirectory(targetDirUri);
-											await vscode.workspace.fs.copy(vscode.Uri.file(file), targetUri, { overwrite: true });
-											copiedCount++;
-											progress.report({ message: `Copied ${copiedCount} of ${files.length}` });
+
+											try {
+												await vscode.workspace.fs.copy(vscode.Uri.file(file), targetUri, { overwrite: false });
+												copiedCount++;
+											} catch (e: any) {
+												const errorMessage = String(e?.message ?? e ?? '');
+												const isConflict = errorMessage.includes('FileExists') || errorMessage.includes('already exists');
+												if (isConflict) {
+													skippedCount++;
+													log.appendLine(`Skipped existing file during migration: ${targetUri.fsPath}`);
+												} else {
+													throw e;
+												}
+											}
+
+											progress.report({ message: `Copied ${copiedCount}, skipped ${skippedCount}, processed ${copiedCount + skippedCount} of ${files.length}` });
 										}
-										vscode.window.showInformationMessage(`Successfully copied ${copiedCount} journal entries to the new location.`);
+										if (skippedCount > 0) {
+											vscode.window.showInformationMessage(`Migration completed: copied ${copiedCount} journal entr${copiedCount === 1 ? 'y' : 'ies'} and skipped ${skippedCount} existing file${skippedCount === 1 ? '' : 's'}.`);
+										} else {
+											vscode.window.showInformationMessage(`Successfully copied ${copiedCount} journal entr${copiedCount === 1 ? 'y' : 'ies'} to the new location.`);
+										}
 									} catch (e) {
 										vscode.window.showErrorMessage(`Failed to copy all files: ${e}`);
 									}

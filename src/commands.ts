@@ -76,20 +76,38 @@ export function registerCommands(
         }
     };
 
+    const isWithinJournalPath = (candidateUri: vscode.Uri, journalPath: string): boolean => {
+        if (candidateUri.scheme !== 'file') {
+            return false;
+        }
+
+        const journalRoot = path.resolve(journalPath);
+        const candidatePath = path.resolve(candidateUri.fsPath);
+        const relativePath = path.relative(journalRoot, candidatePath);
+
+        return relativePath !== ''
+            ? relativePath.split(path.sep)[0] !== '..' && !path.isAbsolute(relativePath)
+            : true;
+    };
+
     const resolveContextUri = async (arg?: any): Promise<vscode.Uri | undefined> => {
+        const currentJournalPath = await ensureValidPath();
+        if (!currentJournalPath) { return undefined; }
+
         let uri: vscode.Uri | undefined;
 
-        if (arg && arg.resourceUri) {
+        if (arg && arg.resourceUri && isWithinJournalPath(arg.resourceUri, currentJournalPath)) {
             uri = arg.resourceUri;
-        } else if (arg instanceof vscode.Uri) {
+        } else if (arg instanceof vscode.Uri && isWithinJournalPath(arg, currentJournalPath)) {
             uri = arg;
-        } else if (vscode.window.activeTextEditor?.document.languageId === 'markdown') {
+        } else if (
+            vscode.window.activeTextEditor?.document.languageId === 'markdown' &&
+            isWithinJournalPath(vscode.window.activeTextEditor.document.uri, currentJournalPath)
+        ) {
             uri = vscode.window.activeTextEditor.document.uri;
         }
 
         if (!uri) {
-            const currentJournalPath = await ensureValidPath();
-            if (!currentJournalPath) { return undefined; }
 
             const files = await getAllMarkdownFiles(currentJournalPath);
             if (files.length === 0) {
