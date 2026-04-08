@@ -41,12 +41,7 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
 
     async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
         if (!this.journalPath) {
-            const messageItem = new vscode.TreeItem('Journal path not set.', vscode.TreeItemCollapsibleState.None);
-            messageItem.command = {
-                command: 'md-journal.newDailyEntry',
-                title: 'Set Journal Path'
-            };
-            return [messageItem];
+            return [];
         }
 
         const folderStructure = getFolderStructure();

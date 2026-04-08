@@ -2,6 +2,16 @@
 
 All notable changes to the "md-journal" extension will be documented in this file.
 
+## 0.6.0
+
+### Features & Improvements
+- **Guided First-Run Setup**: Context-aware welcome panels and unified command fallbacks securely guide you into configuring your root journal via native folder-picker directories without invoking silent failures internally.
+- **Rename Protections & OS Isolation**: Safely intercepts collision strings ensuring manual/auto renames elegantly bounce rather than fatally crashing. Properly maps Linux/Mac/Windows case-sensitive filesystems independently intercepting trailing explicit `.md` strings securely. 
+- **Scoped CPU Background Efficiencies**: Reduced global `**/*.md` memory hooks down dynamically scoping your mapped root path securely terminating un-configured idle extension CPU loads perfectly.
+- **Safe Directory Migrations**: Implicated a fault-tolerant path migration map bouncing un-overwritten collision files cleanly tracking safe skip migrations accurately internally!
+- **Index State Resiliency**: Mitigates overlapping race conditions queuing IDE watch events aggressively securing memory index cache trees flawlessly.
+
+
 ## 0.5.0
 
 ### Performance & Architecture Overhaul

@@ -3,44 +3,74 @@ import * as path from 'path';
 import { IndexService } from './services/IndexService';
 import { sanitizeFileName } from './string';
 import { getJournalFolderPath } from './date';
+import { getJournalPath, getFolderStructure } from './settings';
 
 export function registerListeners(
-    context: vscode.ExtensionContext,
-    journalPath: string,
     indexService: IndexService,
     statusBarItem: vscode.StatusBarItem,
-    folderStructure: string
+    log: vscode.OutputChannel
 ): vscode.Disposable[] {
     const disposables: vscode.Disposable[] = [];
 
     disposables.push(vscode.workspace.onDidSaveTextDocument(async (document) => {
-        if (document.languageId === 'markdown' && document.uri.fsPath.startsWith(journalPath)) {
-            if (path.basename(document.fileName) === 'daily-note.md') {
-                const firstLine = document.lineAt(0).text;
-                if (!firstLine.trim()) {
-                    return;
+        if (document.languageId === 'markdown') {
+            const journalPath = getJournalPath();
+            if (!journalPath) { return; }
+
+            const relativePath = path.relative(journalPath, document.uri.fsPath);
+            const isInsideJournal = relativePath !== '' && !path.isAbsolute(relativePath) && relativePath.split(path.sep)[0] !== '..';
+
+            if (isInsideJournal) {
+                const basename = path.basename(document.fileName);
+                if (basename.toLowerCase() === 'daily-note.md') {
+                    try {
+                        const firstLine = document.lineAt(0).text;
+                        if (!firstLine.trim()) { return; }
+
+                        const newFileName = sanitizeFileName(firstLine) + '.md';
+                        if (!newFileName || newFileName === '.md') { return; }
+
+                        const newFilePath = path.join(path.dirname(document.fileName), newFileName);
+
+                        // Skip if already correctly named. Use case-insensitive comparison on Windows,
+                        // but preserve case-sensitive behavior on other platforms so case-only renames work.
+                        const isSamePath = require('os').platform() === 'win32'
+                            ? newFilePath.toLowerCase() === document.fileName.toLowerCase()
+                            : newFilePath === document.fileName;
+                        if (isSamePath) { return; }
+
+                        // Check for collision — don't silently overwrite an existing file
+                        try {
+                            await vscode.workspace.fs.stat(vscode.Uri.file(newFilePath));
+                            vscode.window.showWarningMessage(
+                                `MD Journal: Could not rename — a file named '${newFileName}' already exists in this folder.`
+                            );
+                            return;
+                        } catch {
+                            // File does not exist, safe to proceed
+                        }
+
+                        await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
+                        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+                        await vscode.workspace.fs.rename(document.uri, vscode.Uri.file(newFilePath));
+
+                        const newDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(newFilePath));
+                        vscode.window.showTextDocument(newDocument);
+                        indexService.updateIndexForFile(newFilePath);
+                    } catch (err: any) {
+                        log.appendLine(`Rename error: ${err.message ?? err}`);
+                        vscode.window.showErrorMessage(`MD Journal: Failed to rename entry — ${err.message ?? err}`);
+                    }
+                } else {
+                    indexService.updateIndexForFile(document.uri.fsPath);
                 }
-
-                const newFileName = sanitizeFileName(firstLine) + '.md';
-                const newFilePath = path.join(path.dirname(document.fileName), newFileName);
-
-                await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
-                await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-
-                await vscode.workspace.fs.rename(document.uri, vscode.Uri.file(newFilePath));
-
-                const newDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(newFilePath));
-                vscode.window.showTextDocument(newDocument);
-                indexService.updateIndexForFile(newFilePath);
-            } else {
-                indexService.updateIndexForFile(document.uri.fsPath);
             }
         }
     }));
 
-    disposables.push(vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem, folderStructure, journalPath)));
+    disposables.push(vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar(statusBarItem)));
 
-    const watcher = vscode.workspace.createFileSystemWatcher('**/*.md');
+    let watcher: vscode.FileSystemWatcher | undefined;
 
     const pendingChanges = new Set<string>();
     let debounceTimer: NodeJS.Timeout | null = null;
@@ -64,17 +94,47 @@ export function registerListeners(
         debounceTimer = setTimeout(processPendingChanges, 300);
     };
 
-    watcher.onDidChange(onFileChange);
-    watcher.onDidCreate(onFileChange);
-    watcher.onDidDelete(onFileChange);
-    disposables.push(watcher);
+    const updateWatcher = () => {
+        if (watcher) {
+            watcher.dispose();
+            watcher = undefined;
+        }
+        const currentJournalPath = getJournalPath();
+        if (currentJournalPath) {
+            const pattern = new vscode.RelativePattern(vscode.Uri.file(currentJournalPath), '**/*.md');
+            watcher = vscode.workspace.createFileSystemWatcher(pattern);
+            watcher.onDidChange(onFileChange);
+            watcher.onDidCreate(onFileChange);
+            watcher.onDidDelete(onFileChange);
+        }
+    };
+
+    updateWatcher();
+
+    disposables.push(vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('md-journal.journalPath')) {
+            updateWatcher();
+        }
+    }));
+
+    disposables.push({
+        dispose: () => {
+            if (watcher) {
+                watcher.dispose();
+            }
+        }
+    });
 
     return disposables;
 }
 
-export async function updateStatusBar(statusBarItem: vscode.StatusBarItem, folderStructure: string, journalPath: string) {
+export async function updateStatusBar(statusBarItem: vscode.StatusBarItem) {
+    const journalPath = getJournalPath();
+    const folderStructure = getFolderStructure();
     if (!journalPath) {
-        statusBarItem.hide();
+        statusBarItem.text = `$(gear) Setup MD Journal`;
+        statusBarItem.command = 'md-journal.newDailyEntry';
+        statusBarItem.show();
         return;
     }
 

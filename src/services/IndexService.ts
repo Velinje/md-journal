@@ -24,6 +24,7 @@ export class IndexService {
     private context?: vscode.ExtensionContext;
 
     public isInitializing: boolean = false;
+    private pendingUpdatesDuringInit: { filePath: string, forceDelete: boolean }[] = [];
 
     private _onIndexUpdated = new vscode.EventEmitter<void>();
     public readonly onIndexUpdated = this._onIndexUpdated.event;
@@ -47,7 +48,18 @@ export class IndexService {
 
     public async setJournalPath(newPath: string) {
         this.journalPath = newPath;
-        await this.initializeIndex();
+        if (!newPath) {
+            this.tagIndex = {};
+            this.linkIndex = {};
+            this.fileToTags = {};
+            this.cachedMdFiles = null;
+            if (this.context) {
+                await this.saveCache();
+            }
+            this._onIndexUpdated.fire();
+        } else {
+            await this.initializeIndex();
+        }
     }
 
     public async initializeIndex() {
@@ -126,6 +138,13 @@ export class IndexService {
             this._onIndexUpdated.fire();
         } finally {
             this.isInitializing = false;
+            if (this.pendingUpdatesDuringInit.length > 0) {
+                const queued = [...this.pendingUpdatesDuringInit];
+                this.pendingUpdatesDuringInit = [];
+                for (const update of queued) {
+                    await this.updateIndexForFile(update.filePath, true, false, update.forceDelete, false);
+                }
+            }
         }
     }
 
@@ -147,6 +166,8 @@ export class IndexService {
 
     public async updateIndexForFile(filePath: string, fireEvent: boolean = true, skipExistsCheck: boolean = false, forceDelete: boolean = false, bypassInitCheck: boolean = false) {
         if (this.isInitializing && !bypassInitCheck) {
+            this.pendingUpdatesDuringInit = this.pendingUpdatesDuringInit.filter(u => u.filePath !== filePath);
+            this.pendingUpdatesDuringInit.push({ filePath, forceDelete });
             return;
         }
 
