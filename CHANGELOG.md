@@ -2,6 +2,11 @@
 
 All notable changes to the "md-journal" extension will be documented in this file.
 
+## 0.6.1
+
+### Hotfixes & Optimizations
+- **Dependency Integrations**: Upgraded core extension infrastructure testing packages and type definitions locally ensuring stable environment configurations securely.
+
 ## 0.6.0
 
 ### Features & Improvements
