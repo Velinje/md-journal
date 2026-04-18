@@ -113,22 +113,23 @@ export class IndexService {
                 }
             }
 
-            const CHUNK_SIZE = 50;
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                try {
-                    const stat = await vscode.workspace.fs.stat(vscode.Uri.file(file));
-                    if (stat.mtime > lastSessionTime || !this.linkIndex[file]) {
-                        await this.updateIndexForFile(file, false, true, false, true);
-                        hasUpdates = true;
-                    }
-                } catch (e) {
-                    console.error(`Error stat ${file}`, e);
-                }
+            const CHUNK_SIZE = 15;
+            for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+                const chunk = files.slice(i, i + CHUNK_SIZE);
 
-                if (i % CHUNK_SIZE === 0) {
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                }
+                await Promise.all(chunk.map(async (file) => {
+                    try {
+                        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(file));
+                        if (stat.mtime > lastSessionTime || !this.linkIndex[file]) {
+                            await this.updateIndexForFile(file, false, true, false, true);
+                            hasUpdates = true;
+                        }
+                    } catch (e) {
+                        console.error(`Error stat ${file}`, e);
+                    }
+                }));
+
+                await new Promise(resolve => setTimeout(resolve, 0));
             }
 
             if (this.context && (hasUpdates || lastSessionTime === 0)) {
@@ -211,8 +212,19 @@ export class IndexService {
 
         this.linkIndex[filePath] = { linksTo: [], linkedFrom: this.linkIndex[filePath]?.linkedFrom || [] };
 
-        const contentUint8Array = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
-        const content = new TextDecoder('utf8').decode(contentUint8Array);
+        let content: string;
+        try {
+            const contentUint8Array = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
+            content = new TextDecoder('utf8').decode(contentUint8Array);
+        } catch (err) {
+            // If the file was deleted mid-flight by the OS, gracefully exit.
+            return;
+        }
+
+        // Concurrency guard: A secondary delete event may have wiped the dictionary definition during the await tick.
+        if (!this.linkIndex[filePath]) {
+            this.linkIndex[filePath] = { linksTo: [], linkedFrom: [] };
+        }
 
         const tags = Array.from(new Set(this.extractTags(content)));
 

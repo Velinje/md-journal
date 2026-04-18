@@ -2,6 +2,12 @@
 
 All notable changes to the "md-journal" extension will be documented in this file.
 
+## 0.6.2
+
+### Hotfixes & Upgrades
+- **Tree View Initialization**: Resolved path issue where the Journal Tree View would fail to load dynamic user configurations properly on boot, leading to false "empty journal" UI states. Tree providers now dynamically fetch current configuration bindings.
+- **Node Engine Compatibility**: Added an explicit `engines.node >= 20.19.0` minimum restriction.
+
 ## 0.6.1
 
 ### Hotfixes & Optimizations
