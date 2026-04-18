@@ -24,12 +24,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		let journalPath = getJournalPath();
 
-		const log = vscode.window.createOutputChannel('MD Journal');
-		context.subscriptions.push(log);
-
 		const setPathContext = () =>
 			vscode.commands.executeCommand('setContext', 'md-journal.hasJournalPath', isJournalPathConfigured());
-		setPathContext();
+		await setPathContext();
 
 		const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
 		context.subscriptions.push(statusBarItem);
@@ -45,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		const tagTreeViewProvider = new TagTreeViewProvider(indexService);
 		context.subscriptions.push(vscode.window.registerTreeDataProvider('md-journal-tags', tagTreeViewProvider));
 
-		const disposables = registerListeners(indexService, statusBarItem, log);
+		const disposables = registerListeners(indexService, statusBarItem);
 		disposables.forEach(d => context.subscriptions.push(d));
 
 		const commandDisposables = registerCommands(
@@ -61,14 +58,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (event) => {
 			if (event.affectsConfiguration('md-journal.journalPath') || event.affectsConfiguration('md-journal.folderStructure')) {
 				const newJournalPath = getJournalPath();
-				setPathContext();
+				await setPathContext();
 				if (event.affectsConfiguration('md-journal.journalPath') && journalPath !== newJournalPath) {
 					const oldPath = journalPath;
 					journalPath = newJournalPath;
 
 					if (oldPath && newJournalPath) {
 						let files: string[] = [];
-						try { files = await getAllMarkdownFiles(oldPath); } catch (e: any) { log.appendLine(`Failed to scan old journal for migration: ${e.message ?? e}`); }
+						try { files = await getAllMarkdownFiles(oldPath); } catch (e: any) { console.error(`Failed to scan old journal for migration: ${e.message ?? e}`); }
 
 						if (files.length > 0) {
 							const selection = await vscode.window.showInformationMessage(
@@ -100,7 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
 												const isConflict = errorMessage.includes('FileExists') || errorMessage.includes('already exists');
 												if (isConflict) {
 													skippedCount++;
-													log.appendLine(`Skipped existing file during migration: ${targetUri.fsPath}`);
+													console.log(`Skipped existing file during migration: ${targetUri.fsPath}`);
 												} else {
 													throw e;
 												}
@@ -131,10 +128,21 @@ export async function activate(context: vscode.ExtensionContext) {
 		}));
 
 		await updateStatusBar(statusBarItem);
-		if (journalPath) {
+
+		const resolvedPath = getJournalPath();
+		if (resolvedPath && resolvedPath !== journalPath) {
+			journalPath = resolvedPath;
+			await setPathContext();
+			journalTreeViewProvider.updateJournalPath(resolvedPath);
+			await indexService.setJournalPath(resolvedPath);
+			await updateStatusBar(statusBarItem);
+		} else if (journalPath) {
 			indexService.initializeIndex().catch(e => {
-				log.appendLine(`Error initializing index: ${e.message ?? e}`);
+				console.error(`Error initializing index: ${e.message ?? e}`);
 			});
+			journalTreeViewProvider.refresh();
+			tagTreeViewProvider.refresh();
+			backlinksTreeViewProvider.refresh();
 		}
 
 		return { indexService };

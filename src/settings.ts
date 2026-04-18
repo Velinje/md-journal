@@ -12,7 +12,10 @@ export function getJournalPath(): string {
         inspected?.workspaceFolderValue ??
         inspected?.workspaceValue ??
         inspected?.globalValue ??
-        '';
+        // Fallback: config.get() performs the full merged read across all scopes.
+        // inspect() can return undefined for all explicit slots during the brief
+        // window at activation start before VS Code's config layer has settled.
+        config.get<string>('journalPath', '');
 
     if (!configuredPath.trim()) {
         return '';
