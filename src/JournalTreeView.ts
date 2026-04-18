@@ -40,19 +40,21 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
     }
 
     async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
-        if (!this.journalPath) {
+        const rootPath = getJournalPath();
+
+        if (!rootPath) {
             return [];
         }
 
         const folderStructure = getFolderStructure();
-        const components = folderStructure.split(/[\/]/);
+        const components = folderStructure.split(/[\/\\]/);
 
         if (element) {
             if (element.contextValue === 'folder') {
-                const currentPath = (element as FolderTreeItem).fullPath;
+                const currentFolderPath = (element as FolderTreeItem).fullPath;
                 const currentLevel = (element as FolderTreeItem).level;
 
-                const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
+                const entries = await fs.promises.readdir(currentFolderPath, { withFileTypes: true });
                 const filteredEntries = entries.filter(entry => {
                     const file = entry.name;
                     const isDirectory = entry.isDirectory();
@@ -73,10 +75,10 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
                     const bIsDir = b.isDirectory();
 
                     if (aIsDir && bIsDir) {
-                        const aPath = path.join(currentPath, a.name);
-                        const bPath = path.join(currentPath, b.name);
-                        const aDate = getDateFromPath(aPath, folderStructure, this.journalPath || '');
-                        const bDate = getDateFromPath(bPath, folderStructure, this.journalPath || '');
+                        const aPath = path.join(currentFolderPath, a.name);
+                        const bPath = path.join(currentFolderPath, b.name);
+                        const aDate = getDateFromPath(aPath, folderStructure, rootPath);
+                        const bDate = getDateFromPath(bPath, folderStructure, rootPath);
                         if (aDate && bDate) {
                             return bDate.getTime() - aDate.getTime();
                         }
@@ -85,9 +87,9 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
                 });
 
                 return filteredEntries.map(entry => {
-                    const childPath = path.join(currentPath, entry.name);
+                    const childPath = path.join(currentFolderPath, entry.name);
                     if (entry.isDirectory()) {
-                        const state = this.getCollapsibleState(childPath, folderStructure);
+                        const state = this.getCollapsibleState(childPath, folderStructure, rootPath);
                         return new FolderTreeItem(entry.name, state, childPath, currentLevel + 1);
                     } else {
                         const treeItem = new vscode.TreeItem(entry.name, vscode.TreeItemCollapsibleState.None);
@@ -104,42 +106,56 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
             }
             return [];
         } else {
-            const rootPath = this.journalPath;
             const firstLevelComponent = components[0];
 
             let entries: fs.Dirent[] = [];
             try {
                 entries = await fs.promises.readdir(rootPath, { withFileTypes: true });
-            } catch (err) {
+            } catch (err: any) {
+                console.error(`[MD Journal] getChildren() readdir failed on ${rootPath}:`, err);
                 return [];
             }
 
-            const firstLevelFolders = entries.filter(entry => {
+            const firstLevelEntries = entries.filter(entry => {
                 if (entry.name === '.templates') {
                     return false;
                 }
-                return entry.isDirectory() && this.matchesComponentPattern(entry.name, firstLevelComponent);
+                const isMarkdownFile = !entry.isDirectory() && entry.name.endsWith('.md');
+                const isMatchingDir = entry.isDirectory() && this.matchesComponentPattern(entry.name, firstLevelComponent);
+                return isMatchingDir || isMarkdownFile;
             }).sort((a, b) => {
                 const aPath = path.join(rootPath, a.name);
                 const bPath = path.join(rootPath, b.name);
-                const aDate = getDateFromPath(aPath, folderStructure, this.journalPath || '');
-                const bDate = getDateFromPath(bPath, folderStructure, this.journalPath || '');
+                const aDate = getDateFromPath(aPath, folderStructure, rootPath);
+                const bDate = getDateFromPath(bPath, folderStructure, rootPath);
                 if (aDate && bDate) {
                     return bDate.getTime() - aDate.getTime();
                 }
                 return b.name.localeCompare(a.name);
             });
 
-            return firstLevelFolders.map(entry => {
+            return firstLevelEntries.map(entry => {
                 const childPath = path.join(rootPath, entry.name);
-                const state = this.getCollapsibleState(childPath, folderStructure);
-                return new FolderTreeItem(entry.name, state, childPath, 1);
+                if (entry.isDirectory()) {
+                    const state = this.getCollapsibleState(childPath, folderStructure, rootPath);
+                    return new FolderTreeItem(entry.name, state, childPath, 1);
+                } else {
+                    const treeItem = new vscode.TreeItem(entry.name, vscode.TreeItemCollapsibleState.None);
+                    treeItem.contextValue = 'file';
+                    treeItem.resourceUri = vscode.Uri.file(childPath);
+                    treeItem.command = {
+                        command: 'vscode.open',
+                        title: 'Open File',
+                        arguments: [vscode.Uri.file(childPath)]
+                    };
+                    return treeItem;
+                }
             });
         }
     }
 
-    private getCollapsibleState(folderPath: string, folderStructure: string): vscode.TreeItemCollapsibleState {
-        const date = getDateFromPath(folderPath, folderStructure, this.journalPath || '');
+    private getCollapsibleState(folderPath: string, folderStructure: string, rootPath: string): vscode.TreeItemCollapsibleState {
+        const date = getDateFromPath(folderPath, folderStructure, rootPath);
         if (!date) {
             return vscode.TreeItemCollapsibleState.Collapsed;
         }
@@ -151,7 +167,7 @@ export class JournalTreeViewProvider implements vscode.TreeDataProvider<vscode.T
         const folderYear = date.getFullYear();
         const folderMonth = date.getMonth();
 
-        const relativePath = path.relative(this.journalPath || '', folderPath);
+        const relativePath = path.relative(rootPath, folderPath);
         const pathParts = relativePath.split(path.sep);
         const structureParts = folderStructure.split(/[\/\\]/);
         const currentLevelIndex = pathParts.length - 1;

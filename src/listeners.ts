@@ -7,8 +7,7 @@ import { getJournalPath, getFolderStructure } from './settings';
 
 export function registerListeners(
     indexService: IndexService,
-    statusBarItem: vscode.StatusBarItem,
-    log: vscode.OutputChannel
+    statusBarItem: vscode.StatusBarItem
 ): vscode.Disposable[] {
     const disposables: vscode.Disposable[] = [];
 
@@ -58,7 +57,7 @@ export function registerListeners(
                         vscode.window.showTextDocument(newDocument);
                         indexService.updateIndexForFile(newFilePath);
                     } catch (err: any) {
-                        log.appendLine(`Rename error: ${err.message ?? err}`);
+                        console.error(`Rename error: ${err.message ?? err}`);
                         vscode.window.showErrorMessage(`MD Journal: Failed to rename entry — ${err.message ?? err}`);
                     }
                 } else {
